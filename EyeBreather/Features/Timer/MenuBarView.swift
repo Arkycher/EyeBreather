@@ -270,8 +270,7 @@ struct MenuBarView: View {
     }
     
     private func openSettings() {
-        // TODO: 打开设置窗口
-        NSApp.activate(ignoringOtherApps: true)
+        SettingsWindowController.shared.showSettings()
     }
     
     private func openStatistics() {
