@@ -32,6 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         
         // 初始化应用检测器
         _ = AppDetector.shared
+        
+        // 初始化媒体设备监视器
+        _ = MediaDeviceMonitor.shared
     }
     
     private func setupNotificationDelegate() {
