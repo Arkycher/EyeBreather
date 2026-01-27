@@ -1,66 +1,101 @@
+// EyeBreather/Features/Timer/MenuBarView.swift
 import SwiftUI
 
-/// 菜单栏弹出视图
+/// 菜单栏弹出视图 - 圆环式设计
 struct MenuBarView: View {
     @ObservedObject private var timerManager = TimerManager.shared
-    @ObservedObject private var settingsManager = SettingsManager.shared
     @ObservedObject private var appDetector = AppDetector.shared
+    @ObservedObject private var mediaMonitor = MediaDeviceMonitor.shared
     
     @Environment(\.modelContext) private var modelContext
     
     var body: some View {
-        VStack(spacing: 12) {
-            // 标题栏
-            headerView
+        VStack(spacing: 16) {
+            // 圆环进度
+            circularTimerView
             
-            Divider()
-            
-            // 计时器状态
-            timerStatusView
-            
-            Divider()
-            
-            // 今日统计
-            todayStatsView
-            
-            Divider()
+            // 状态指示
+            statusIndicatorView
             
             // 操作按钮
             actionButtonsView
             
             Divider()
+                .padding(.horizontal)
             
-            // 底部按钮
-            footerView
+            // 今日统计
+            todayStatsView
+            
+            Divider()
+                .padding(.horizontal)
+            
+            // 底部工具栏
+            toolbarView
         }
-        .padding(.vertical, 12)
-        .frame(width: 280)
+        .padding(.vertical, 16)
+        .padding(.horizontal, 12)
+        .frame(width: 260)
+        .background(.regularMaterial)
     }
     
-    // MARK: - Header
+    // MARK: - Circular Timer
     
-    private var headerView: some View {
-        HStack {
-            Image(systemName: "eye")
-                .font(.title2)
-                .foregroundColor(.accentColor)
-            Text("EyeBreather")
-                .font(.headline)
-            Spacer()
-            
-            // 状态指示
-            statusIndicator
-        }
-        .padding(.horizontal)
+    private var circularTimerView: some View {
+        CircularProgressView(
+            progress: timerProgress,
+            timeText: timerText,
+            subtitle: timerSubtitle,
+            color: statusColor,
+            size: 120
+        )
+        .padding(.top, 8)
     }
     
-    private var statusIndicator: some View {
-        HStack(spacing: 4) {
+    private var timerProgress: Double {
+        switch timerManager.state {
+        case .breaking:
+            return timerManager.breakProgress
+        default:
+            return timerManager.workProgress
+        }
+    }
+    
+    private var timerText: String {
+        if appDetector.shouldPauseReminder {
+            return "--:--"
+        }
+        
+        switch timerManager.state {
+        case .breaking:
+            let remaining = timerManager.remainingBreakTime
+            return String(format: "%d:%02d", remaining / 60, remaining % 60)
+        default:
+            let remaining = timerManager.remainingWorkTime
+            return String(format: "%d:%02d", remaining / 60, remaining % 60)
+        }
+    }
+    
+    private var timerSubtitle: String {
+        switch timerManager.state {
+        case .breaking:
+            return "休息中"
+        case .idle:
+            return "未启动"
+        default:
+            return "下次休息"
+        }
+    }
+    
+    // MARK: - Status Indicator
+    
+    private var statusIndicatorView: some View {
+        HStack(spacing: 6) {
             Circle()
                 .fill(statusColor)
                 .frame(width: 8, height: 8)
+            
             Text(statusText)
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundColor(.secondary)
         }
     }
@@ -79,8 +114,11 @@ struct MenuBarView: View {
     }
     
     private var statusText: String {
-        if appDetector.shouldPauseReminder {
-            return "已暂停"
+        if case .meeting = appDetector.pauseReason {
+            return "会议中"
+        }
+        if case .focusApp(let name) = appDetector.pauseReason {
+            return "专注模式 · \(name)"
         }
         switch timerManager.state {
         case .idle: return "未启动"
@@ -91,111 +129,6 @@ struct MenuBarView: View {
         }
     }
     
-    // MARK: - Timer Status
-    
-    private var timerStatusView: some View {
-        VStack(spacing: 8) {
-            // 下次休息时间
-            HStack {
-                Text("下次休息")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                Spacer()
-                Text(nextBreakText)
-                    .font(.subheadline.monospacedDigit())
-                    .fontWeight(.medium)
-            }
-            
-            // 进度条
-            ProgressView(value: timerManager.workProgress)
-                .progressViewStyle(.linear)
-                .tint(progressColor)
-        }
-        .padding(.horizontal)
-    }
-    
-    private var nextBreakText: String {
-        if timerManager.state == .breaking {
-            return "休息中..."
-        }
-        if timerManager.state == .paused || appDetector.shouldPauseReminder {
-            return "已暂停"
-        }
-        
-        let remaining = timerManager.remainingWorkTime
-        let minutes = remaining / 60
-        let seconds = remaining % 60
-        return String(format: "%d:%02d", minutes, seconds)
-    }
-    
-    private var progressColor: Color {
-        if timerManager.isInPreBreakWarning {
-            return .orange
-        }
-        return .accentColor
-    }
-    
-    // MARK: - Today Stats
-    
-    private var todayStatsView: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("📊 今日统计")
-                .font(.subheadline.bold())
-            
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("使用时长")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(formattedActiveTime)
-                        .font(.caption.monospacedDigit())
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .center, spacing: 2) {
-                    Text("休息次数")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text("\(completedBreaks)/\(totalBreaks)")
-                        .font(.caption.monospacedDigit())
-                }
-                
-                Spacer()
-                
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text("完成率")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(completionRateText)
-                        .font(.caption.monospacedDigit())
-                }
-            }
-        }
-        .padding(.horizontal)
-    }
-    
-    // 这些属性后续会从 DailyStatistics 中获取，现在用占位值
-    private var formattedActiveTime: String {
-        // TODO: 从 DailyStatistics 获取
-        "--:--"
-    }
-    
-    private var completedBreaks: Int {
-        // TODO: 从 DailyStatistics 获取
-        0
-    }
-    
-    private var totalBreaks: Int {
-        // TODO: 从 DailyStatistics 获取
-        0
-    }
-    
-    private var completionRateText: String {
-        // TODO: 从 DailyStatistics 获取
-        "--%"
-    }
-    
     // MARK: - Action Buttons
     
     private var actionButtonsView: some View {
@@ -204,37 +137,48 @@ struct MenuBarView: View {
             Button(action: togglePause) {
                 HStack(spacing: 4) {
                     Image(systemName: isPaused ? "play.fill" : "pause.fill")
+                        .font(.caption)
                     Text(isPaused ? "继续" : "暂停")
+                        .font(.subheadline)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
             }
             .buttonStyle(.bordered)
-            
-            Spacer()
+            .tint(.secondary)
             
             // 立即休息按钮
             Button(action: startBreakNow) {
                 HStack(spacing: 4) {
                     Image(systemName: "eye.slash.fill")
+                        .font(.caption)
                     Text("立即休息")
+                        .font(.subheadline)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
             }
             .buttonStyle(.bordered)
+            .tint(.accentColor)
             .disabled(timerManager.state == .breaking)
         }
-        .padding(.horizontal)
+        .padding(.horizontal, 4)
     }
     
     private var isPaused: Bool {
-        timerManager.state == .paused
+        timerManager.state == .paused || timerManager.state == .idle
     }
     
     private func togglePause() {
-        if timerManager.state == .paused {
+        switch timerManager.state {
+        case .paused:
             timerManager.resume()
-        } else if timerManager.state == .working || timerManager.state == .preBreak {
-            timerManager.pause()
-        } else if timerManager.state == .idle {
+        case .idle:
             timerManager.start()
+        case .working, .preBreak:
+            timerManager.pause()
+        default:
+            break
         }
     }
     
@@ -243,30 +187,70 @@ struct MenuBarView: View {
         BreakWindowController.shared.showOverlay()
     }
     
-    // MARK: - Footer
+    // MARK: - Today Stats
     
-    private var footerView: some View {
+    private var todayStatsView: some View {
         HStack {
-            Button("设置...") {
-                openSettings()
+            Label {
+                Text("--:--")
+                    .font(.subheadline.monospacedDigit())
+            } icon: {
+                Image(systemName: "clock")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-            .buttonStyle(.borderless)
             
             Spacer()
             
-            Button("统计...") {
-                openStatistics()
-            }
-            .buttonStyle(.borderless)
+            Text("·")
+                .foregroundColor(.secondary)
             
             Spacer()
             
-            Button("退出") {
-                NSApplication.shared.terminate(nil)
+            Label {
+                Text("休息 0/0")
+                    .font(.subheadline.monospacedDigit())
+            } icon: {
+                Image(systemName: "checkmark.circle")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-            .buttonStyle(.borderless)
         }
-        .padding(.horizontal)
+        .padding(.horizontal, 8)
+    }
+    
+    // MARK: - Toolbar
+    
+    private var toolbarView: some View {
+        HStack(spacing: 0) {
+            Button(action: openSettings) {
+                Image(systemName: "gearshape")
+                    .font(.title3)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.secondary)
+            
+            Button(action: openStatistics) {
+                Image(systemName: "chart.bar")
+                    .font(.title3)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.secondary)
+            
+            Button(action: quitApp) {
+                Image(systemName: "xmark.circle")
+                    .font(.title3)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.secondary)
+        }
+        .padding(.vertical, 4)
     }
     
     private func openSettings() {
@@ -275,6 +259,10 @@ struct MenuBarView: View {
     
     private func openStatistics() {
         StatisticsWindowController.shared.showStatistics()
+    }
+    
+    private func quitApp() {
+        NSApplication.shared.terminate(nil)
     }
 }
 
