@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
 struct EyeBreatherApp: App {
@@ -13,5 +14,6 @@ struct EyeBreatherApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(DataStoreManager.shared.container)
     }
 }
