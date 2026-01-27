@@ -21,6 +21,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         let settings = AppSettings.load()
         updateDockIconVisibility(show: settings.showInDock)
         
+        // 初始化外观管理器
+        _ = AppearanceManager.shared
+        
+        // 初始化开机自启管理器
+        _ = LaunchAtLoginManager.shared
+        
         // 初始化系统状态监视器
         _ = SystemStateMonitor.shared
         

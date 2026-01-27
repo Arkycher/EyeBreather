@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// 设置视图
 struct SettingsView: View {
@@ -230,12 +231,25 @@ struct BreakStyleSettingsView: View {
 
 struct GeneralSettingsView: View {
     @ObservedObject private var settingsManager = SettingsManager.shared
+    @ObservedObject private var launchAtLoginManager = LaunchAtLoginManager.shared
     
     var body: some View {
         Form {
             Section {
-                Toggle("开机自动启动", isOn: $settingsManager.settings.launchAtLogin)
-                Toggle("在 Dock 中显示图标", isOn: $settingsManager.settings.showInDock)
+                Toggle("开机自动启动", isOn: Binding(
+                    get: { launchAtLoginManager.isEnabled },
+                    set: { launchAtLoginManager.setEnabled($0) }
+                ))
+                
+                Toggle("在 Dock 中显示图标", isOn: Binding(
+                    get: { settingsManager.settings.showInDock },
+                    set: { newValue in
+                        settingsManager.settings.showInDock = newValue
+                        if let appDelegate = NSApp.delegate as? AppDelegate {
+                            appDelegate.updateDockIconVisibility(show: newValue)
+                        }
+                    }
+                ))
                 
                 Picker("外观模式", selection: $settingsManager.settings.appearance) {
                     ForEach(AppearanceMode.allCases, id: \.self) { mode in
