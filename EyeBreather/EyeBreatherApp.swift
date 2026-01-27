@@ -13,7 +13,16 @@ struct EyeBreatherApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     var body: some Scene {
-        // 使用 Settings 场景作为主窗口（可选显示）
+        // 菜单栏应用
+        MenuBarExtra {
+            MenuBarView()
+                .modelContainer(DataStoreManager.shared.container)
+        } label: {
+            Image(systemName: "eye")
+        }
+        .menuBarExtraStyle(.window)
+        
+        // 设置窗口
         Settings {
             ContentView()
                 .modelContainer(DataStoreManager.shared.container)
