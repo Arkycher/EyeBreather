@@ -123,18 +123,22 @@ struct SmartDetectionSettingsView: View {
             }
             
             Section {
-                // 全屏暂停
-                Toggle("全屏应用时暂停", isOn: $settingsManager.settings.enableFullscreenPause)
+                // 会议检测
+                Toggle("会议检测", isOn: $settingsManager.settings.enableMeetingDetection)
                 
-                // 白名单应用
-                DisclosureGroup("应用白名单 (\(settingsManager.settings.whitelistApps.count))") {
-                    ForEach(settingsManager.settings.whitelistApps, id: \.self) { bundleId in
+                // 专注模式应用列表
+                DisclosureGroup("专注模式应用 (\(settingsManager.settings.focusApps.count))") {
+                    ForEach(settingsManager.settings.focusApps) { app in
                         HStack {
-                            Text(bundleId)
-                                .font(.caption)
+                            Text(app.name)
                             Spacer()
+                            if app.isPreset {
+                                Text("预设")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
                             Button(action: {
-                                removeFromWhitelist(bundleId)
+                                removeFromFocusApps(app.bundleId)
                             }) {
                                 Image(systemName: "minus.circle")
                                     .foregroundColor(.red)
@@ -147,15 +151,18 @@ struct SmartDetectionSettingsView: View {
                     Menu("添加应用...") {
                         ForEach(availableApps, id: \.bundleId) { app in
                             Button(app.name) {
-                                addToWhitelist(app.bundleId)
+                                addToFocusApps(app.bundleId, name: app.name)
                             }
                         }
                     }
                 }
+                
+                // 智能推荐
+                Toggle("智能推荐", isOn: $settingsManager.settings.enableSmartRecommend)
             } header: {
-                Text("应用检测")
+                Text("智能暂停")
             } footer: {
-                Text("白名单中的应用运行时不会触发休息提醒")
+                Text("专注模式应用运行时不会触发休息提醒")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -165,15 +172,16 @@ struct SmartDetectionSettingsView: View {
     
     private var availableApps: [(bundleId: String, name: String)] {
         AppDetector.shared.getRunningApps()
-            .filter { !settingsManager.settings.whitelistApps.contains($0.bundleId) }
+            .filter { app in !settingsManager.settings.focusApps.contains(where: { $0.bundleId == app.bundleId }) }
     }
     
-    private func addToWhitelist(_ bundleId: String) {
-        settingsManager.settings.whitelistApps.append(bundleId)
+    private func addToFocusApps(_ bundleId: String, name: String) {
+        let newApp = FocusApp(bundleId: bundleId, name: name, isPreset: false)
+        settingsManager.settings.focusApps.append(newApp)
     }
     
-    private func removeFromWhitelist(_ bundleId: String) {
-        settingsManager.settings.whitelistApps.removeAll { $0 == bundleId }
+    private func removeFromFocusApps(_ bundleId: String) {
+        settingsManager.settings.focusApps.removeAll { $0.bundleId == bundleId }
     }
 }
 

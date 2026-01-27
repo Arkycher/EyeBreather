@@ -3,7 +3,7 @@ import AppKit
 import Combine
 
 /// 应用检测器
-/// 检测全屏应用和白名单应用
+/// 检测专注模式应用
 @MainActor
 final class AppDetector: ObservableObject {
     /// 共享实例
@@ -162,14 +162,9 @@ final class AppDetector: ObservableObject {
         
         var shouldPause = false
         
-        // 检查全屏暂停
-        if settings.enableFullscreenPause && isFullscreenAppActive {
-            shouldPause = true
-        }
-        
-        // 检查白名单应用
+        // 检查专注模式应用
         if let bundleId = frontmostAppBundleId,
-           settings.whitelistApps.contains(bundleId) {
+           settings.focusApps.contains(where: { $0.bundleId == bundleId }) {
             shouldPause = true
         }
         
@@ -188,9 +183,9 @@ final class AppDetector: ObservableObject {
     
     // MARK: - Public Methods
     
-    /// 检查指定 Bundle ID 是否在白名单中
-    func isInWhitelist(_ bundleId: String) -> Bool {
-        SettingsManager.shared.settings.whitelistApps.contains(bundleId)
+    /// 检查指定 Bundle ID 是否在专注模式应用列表中
+    func isInFocusApps(_ bundleId: String) -> Bool {
+        SettingsManager.shared.settings.focusApps.contains(where: { $0.bundleId == bundleId })
     }
     
     /// 获取所有正在运行的应用（用于白名单选择）

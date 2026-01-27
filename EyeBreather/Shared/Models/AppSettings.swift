@@ -27,11 +27,16 @@ struct AppSettings: Codable, Equatable {
     /// 空闲重置阈值（分钟），默认 5
     var idleResetThreshold: Int = 5
     
-    /// 全屏应用时暂停
-    var enableFullscreenPause: Bool = true
+    // MARK: - 智能暂停
     
-    /// 白名单应用 Bundle ID
-    var whitelistApps: [String] = []
+    /// 启用会议检测（摄像头/麦克风）
+    var enableMeetingDetection: Bool = true
+    
+    /// 专注模式应用列表
+    var focusApps: [FocusApp] = FocusApp.presets
+    
+    /// 启用智能推荐
+    var enableSmartRecommend: Bool = true
     
     // MARK: - 休息界面
     
