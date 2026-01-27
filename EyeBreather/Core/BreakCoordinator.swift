@@ -12,6 +12,15 @@ final class BreakCoordinator {
     
     private var cancellables = Set<AnyCancellable>()
     
+    /// 温和模式自动开始休息的定时器
+    private var autoBreakTimer: Timer?
+    
+    /// 温和模式等待时间（秒）- 发送通知后多久自动开始休息
+    private let gentleModeWaitSeconds: TimeInterval = 30
+    
+    /// 是否已经触发过休息（防止重复触发）
+    private var breakTriggered = false
+    
     private init() {
         setupObservers()
         requestNotificationPermission()
@@ -87,6 +96,10 @@ final class BreakCoordinator {
         // 检查是否应该暂停
         guard !AppDetector.shared.shouldPauseReminder else { return }
         
+        // 防止重复触发
+        guard !breakTriggered else { return }
+        breakTriggered = true
+        
         let settings = SettingsManager.shared.settings
         
         switch settings.reminderMode {
@@ -95,17 +108,43 @@ final class BreakCoordinator {
             startBreak()
             
         case .gentle:
-            // 温和模式：发送通知，让用户选择
+            // 温和模式：发送通知，30秒后自动开始休息
             sendBreakNotification()
+            scheduleAutoBreak()
             
         case .progressive:
             // 渐进模式：根据跳过次数决定
             // TODO: 实现渐进逻辑
             sendBreakNotification()
+            scheduleAutoBreak()
         }
     }
     
+    /// 安排自动开始休息（温和模式）
+    private func scheduleAutoBreak() {
+        cancelAutoBreak()
+        
+        autoBreakTimer = Timer.scheduledTimer(withTimeInterval: gentleModeWaitSeconds, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self else { return }
+                // 如果还没有开始休息，自动开始
+                if TimerManager.shared.state != .breaking {
+                    self.startBreak()
+                }
+            }
+        }
+    }
+    
+    /// 取消自动休息定时器
+    private func cancelAutoBreak() {
+        autoBreakTimer?.invalidate()
+        autoBreakTimer = nil
+    }
+    
     private func handleBreakCompleted() {
+        // 重置触发标记
+        breakTriggered = false
+        
         // 隐藏遮罩
         BreakWindowController.shared.hideOverlay()
         
@@ -144,17 +183,22 @@ final class BreakCoordinator {
     // MARK: - Break Actions
     
     func startBreak() {
+        cancelAutoBreak()
         TimerManager.shared.startBreak()
         BreakWindowController.shared.showOverlay()
     }
     
     func skipBreak() {
+        cancelAutoBreak()
+        breakTriggered = false
         TimerManager.shared.skipBreak()
         BreakWindowController.shared.hideOverlay()
         recordBreakSkipped()
     }
     
     func delayBreak(minutes: Int) {
+        cancelAutoBreak()
+        breakTriggered = false
         TimerManager.shared.delayBreak(minutes: minutes)
         BreakWindowController.shared.hideOverlay()
     }
