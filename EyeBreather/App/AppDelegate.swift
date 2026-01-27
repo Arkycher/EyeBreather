@@ -1,7 +1,8 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     /// 菜单栏状态项
     private var statusItem: NSStatusItem?
     
@@ -14,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenuBar()
         setupEventMonitor()
+        setupNotificationDelegate()
         
         // 隐藏 Dock 图标（根据设置）
         let settings = AppSettings.load()
@@ -27,6 +29,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         
         // 启动计时器
         TimerManager.shared.start()
+        
+        // 初始化休息协调器
+        _ = BreakCoordinator.shared
+        
+        // 初始化应用检测器
+        _ = AppDetector.shared
+    }
+    
+    private func setupNotificationDelegate() {
+        UNUserNotificationCenter.current().delegate = self
+    }
+    
+    // MARK: - UNUserNotificationCenterDelegate
+    
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        // 应用在前台时也显示通知
+        completionHandler([.banner, .sound])
+    }
+    
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        Task { @MainActor in
+            handleNotificationResponse(response)
+        }
+        completionHandler()
+    }
+    
+    @MainActor
+    private func handleNotificationResponse(_ response: UNNotificationResponse) {
+        switch response.actionIdentifier {
+        case "START_BREAK":
+            BreakCoordinator.shared.startBreak()
+            
+        case "SKIP_BREAK":
+            BreakCoordinator.shared.skipBreak()
+            
+        case "DELAY_5MIN":
+            BreakCoordinator.shared.delayBreak(minutes: 5)
+            
+        case UNNotificationDefaultActionIdentifier:
+            // 用户点击通知本身（而非按钮）
+            BreakCoordinator.shared.startBreak()
+            
+        default:
+            break
+        }
     }
     
     // MARK: - Menu Bar Setup
