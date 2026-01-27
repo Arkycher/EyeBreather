@@ -1,5 +1,6 @@
 import Foundation
 import ServiceManagement
+import Combine
 
 /// 开机自启管理器
 @MainActor

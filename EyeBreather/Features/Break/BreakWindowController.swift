@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Combine
 
 /// 休息遮罩窗口控制器
 @MainActor
