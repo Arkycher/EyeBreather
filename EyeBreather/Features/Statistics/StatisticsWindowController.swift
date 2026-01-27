@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import SwiftData
 
 /// 统计窗口控制器
 @MainActor

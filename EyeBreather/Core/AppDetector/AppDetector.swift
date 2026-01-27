@@ -34,7 +34,11 @@ final class AppDetector: ObservableObject {
     }
     
     deinit {
-        stopMonitoring()
+        // 在 deinit 中直接清理资源（不调用 @MainActor 方法）
+        if let observer = appObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+        checkTimer?.invalidate()
     }
     
     // MARK: - Setup

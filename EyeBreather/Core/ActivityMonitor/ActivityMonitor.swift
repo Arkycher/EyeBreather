@@ -33,7 +33,11 @@ final class ActivityMonitor: ObservableObject {
     }
     
     deinit {
-        stopMonitoring()
+        // 在 deinit 中清理资源（不调用 @MainActor 方法）
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        idleCheckTimer?.invalidate()
     }
     
     private func observeSettingsChanges() {

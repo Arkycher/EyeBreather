@@ -32,7 +32,13 @@ final class SystemStateMonitor: ObservableObject {
     }
     
     deinit {
-        removeObservers()
+        // 在 deinit 中直接清理资源（不调用 @MainActor 方法）
+        if let observer = sleepObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+        if let observer = wakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
     }
     
     // MARK: - Setup

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import SwiftData
 
 /// 设置窗口控制器
 @MainActor

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import SwiftData
 import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
