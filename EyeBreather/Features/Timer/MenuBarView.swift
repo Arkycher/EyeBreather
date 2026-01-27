@@ -274,8 +274,7 @@ struct MenuBarView: View {
     }
     
     private func openStatistics() {
-        // TODO: 打开统计窗口
-        NSApp.activate(ignoringOtherApps: true)
+        StatisticsWindowController.shared.showStatistics()
     }
 }
 
