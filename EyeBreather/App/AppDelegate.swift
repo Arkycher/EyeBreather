@@ -18,6 +18,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 隐藏 Dock 图标（根据设置）
         let settings = AppSettings.load()
         updateDockIconVisibility(show: settings.showInDock)
+        
+        // 初始化系统状态监视器
+        _ = SystemStateMonitor.shared
+        
+        // 初始化活动监视器
+        ActivityMonitor.shared.startMonitoring()
+        
+        // 启动计时器
+        TimerManager.shared.start()
     }
     
     // MARK: - Menu Bar Setup
