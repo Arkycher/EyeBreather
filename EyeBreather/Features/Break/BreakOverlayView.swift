@@ -36,8 +36,8 @@ struct BreakOverlayView: View {
                     .frame(width: 300)
                     .tint(.white)
                 
-                // 操作按钮（仅温和模式显示）
-                if settingsManager.settings.reminderMode == .gentle {
+                // 操作按钮（温和模式和渐进模式非强制状态显示）
+                if canSkipBreak {
                     HStack(spacing: 20) {
                         Button("跳过") {
                             skipBreak()
@@ -106,9 +106,13 @@ struct BreakOverlayView: View {
             Color.black.opacity(0.85)
         case .desktop:
             // 使用系统桌面壁纸
-            DesktopWallpaperView()
-                .overlay(Color.black.opacity(0.3))
-                .blur(radius: 30)
+            GeometryReader { geometry in
+                DesktopWallpaperView()
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
+            }
+            .overlay(Color.black.opacity(0.3))
+            .blur(radius: 30)
         case .custom:
             if let path = settingsManager.settings.customBackgroundPath,
                let nsImage = NSImage(contentsOfFile: path) {
@@ -132,6 +136,21 @@ struct BreakOverlayView: View {
     }
     
     // MARK: - Computed Properties
+    
+    /// 是否可以跳过休息
+    private var canSkipBreak: Bool {
+        switch settingsManager.settings.reminderMode {
+        case .forced:
+            // 强制模式不能跳过
+            return false
+        case .gentle:
+            // 温和模式可以跳过
+            return true
+        case .progressive:
+            // 渐进模式：未达到强制阈值时可以跳过
+            return !BreakStatisticsManager.shared.shouldForceBreak
+        }
+    }
     
     private var formattedRemainingTime: String {
         let remaining = timerManager.remainingBreakTime
