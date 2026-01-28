@@ -68,21 +68,38 @@ struct BreakOverlayView: View {
             Color.clear
                 .background(.ultraThinMaterial)
         case .liquidGlass:
-            // 液态玻璃效果 - macOS 26 风格
-            ZStack {
-                // 渐变背景
-                LinearGradient(
-                    colors: [
-                        Color.blue.opacity(0.15),
-                        Color.purple.opacity(0.1),
-                        Color.pink.opacity(0.1)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                // 玻璃效果叠加
-                Color.clear
-                    .background(.ultraThinMaterial)
+            // 液态玻璃效果 - macOS 26 原生 API
+            if #available(macOS 26, *) {
+                ZStack {
+                    // 渐变背景增强玻璃折射效果
+                    LinearGradient(
+                        colors: [
+                            Color.blue.opacity(0.2),
+                            Color.purple.opacity(0.15),
+                            Color.pink.opacity(0.15)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    // 原生液态玻璃效果
+                    Color.clear
+                        .glassEffect()
+                }
+            } else {
+                // 回退方案：渐变 + 毛玻璃
+                ZStack {
+                    LinearGradient(
+                        colors: [
+                            Color.blue.opacity(0.15),
+                            Color.purple.opacity(0.1),
+                            Color.pink.opacity(0.1)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    Color.clear
+                        .background(.ultraThinMaterial)
+                }
             }
         case .dark:
             Color.black.opacity(0.95)
