@@ -22,13 +22,15 @@ final class SettingsWindowController {
             .modelContainer(DataStoreManager.shared.container)
         
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 550),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 520),
+            styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
         
-        window.title = "EyeBreather 设置"
+        window.title = "EyeBreather"
+        window.titlebarAppearsTransparent = true
+        window.backgroundColor = NSColor(white: 0.94, alpha: 1.0)  // 匹配侧边栏
         window.contentView = NSHostingView(rootView: settingsView)
         window.center()
         window.isReleasedWhenClosed = false

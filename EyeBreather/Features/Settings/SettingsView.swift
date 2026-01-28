@@ -39,10 +39,10 @@ struct SettingsView: View {
     
     var body: some View {
         HStack(spacing: 0) {
-            // 侧边栏
-            VStack(alignment: .leading, spacing: 4) {
+            // 侧边栏 - Surge 风格：浅灰色背景
+            VStack(alignment: .leading, spacing: 2) {
                 ForEach(SettingsSection.allCases) { section in
-                    SidebarItem(
+                    SurgeSidebarItem(
                         title: section.title,
                         icon: section.icon,
                         isSelected: selectedSection == section
@@ -52,35 +52,44 @@ struct SettingsView: View {
                 }
                 Spacer()
             }
-            .padding(.vertical, 12)
+            .padding(.top, 12)
             .padding(.horizontal, 8)
             .frame(width: 160)
-            .background(.ultraThinMaterial)
+            .frame(maxHeight: .infinity)
+            .background(Color(nsColor: NSColor(white: 0.94, alpha: 1.0)))
             
-            // 分隔线
-            Divider()
-            
-            // 详情视图
+            // 内容区 - 渐变背景
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     // 标题区域
                     Text(selectedSection.title)
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                        .padding(.bottom, 12)
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .padding(.horizontal, 28)
+                        .padding(.top, 24)
+                        .padding(.bottom, 20)
                     
                     // 内容区域
                     detailContent
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
+                        .padding(.horizontal, 28)
+                        .padding(.bottom, 28)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.regularMaterial)
+            .background(
+                // Surge 风格：粉紫渐变背景
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.98, green: 0.96, blue: 0.98),
+                        Color(red: 0.96, green: 0.94, blue: 0.98),
+                        Color(red: 0.94, green: 0.92, blue: 0.96)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
         }
-        .frame(width: 580, height: 480)
+        .frame(width: 640, height: 520)
     }
     
     @ViewBuilder
@@ -98,9 +107,9 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - Sidebar Item
+// MARK: - Surge Sidebar Item (Surge 风格)
 
-struct SidebarItem: View {
+struct SurgeSidebarItem: View {
     let title: String
     let icon: String
     let isSelected: Bool
@@ -110,21 +119,21 @@ struct SidebarItem: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .font(.system(size: 14))
-                    .foregroundColor(isSelected ? .white : .primary)
-                    .frame(width: 20)
+                    .font(.system(size: 15))
+                    .foregroundColor(isSelected ? .primary : .secondary)
+                    .frame(width: 22)
                 
                 Text(title)
-                    .font(.system(size: 13))
-                    .foregroundColor(isSelected ? .white : .primary)
+                    .font(.system(size: 14, weight: isSelected ? .medium : .regular))
+                    .foregroundColor(isSelected ? .primary : .secondary)
                 
                 Spacer()
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
             .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.accentColor : Color.clear)
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? Color(nsColor: NSColor(white: 0.88, alpha: 1.0)) : Color.clear)
             )
         }
         .buttonStyle(.plain)
@@ -145,18 +154,19 @@ struct SettingsCard<Content: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            // 分组标题：深灰色，更有层次感
             Text(title)
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(.secondary)
-                .textCase(.uppercase)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(Color(nsColor: NSColor(white: 0.4, alpha: 1.0)))
             
+            // 白色圆角卡片
             VStack(spacing: 0) {
                 content()
             }
-            .background(.thickMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
             
             if let footer = footer {
                 Text(footer)
