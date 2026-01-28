@@ -67,15 +67,39 @@ struct BreakOverlayView: View {
             // 毛玻璃效果背景
             Color.clear
                 .background(.ultraThinMaterial)
+        case .liquidGlass:
+            // 液态玻璃效果 - macOS 26 风格
+            ZStack {
+                // 渐变背景
+                LinearGradient(
+                    colors: [
+                        Color.blue.opacity(0.15),
+                        Color.purple.opacity(0.1),
+                        Color.pink.opacity(0.1)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                // 玻璃效果叠加
+                Color.clear
+                    .background(.ultraThinMaterial)
+            }
         case .dark:
             Color.black.opacity(0.95)
         case .tips:
             Color.black.opacity(0.85)
-        case .animation:
-            Color.black.opacity(0.9)
-        case .scenery:
-            // TODO: 添加自然风景图片
-            Color.black.opacity(0.9)
+        case .lockScreen:
+            // 使用系统锁屏壁纸
+            if let wallpaperURL = NSWorkspace.shared.desktopImageURL(for: NSScreen.main ?? NSScreen.screens[0]),
+               let nsImage = NSImage(contentsOf: wallpaperURL) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .overlay(Color.black.opacity(0.4))
+                    .blur(radius: 20)
+            } else {
+                Color.black.opacity(0.9)
+            }
         case .custom:
             if let path = settingsManager.settings.customBackgroundPath,
                let nsImage = NSImage(contentsOfFile: path) {

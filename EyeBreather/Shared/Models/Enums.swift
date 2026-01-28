@@ -26,19 +26,19 @@ enum ReminderMode: String, Codable, CaseIterable {
 /// 休息界面样式
 enum BreakStyle: String, Codable, CaseIterable {
     case blur = "blur"           // 背景模糊
+    case liquidGlass = "liquidGlass" // 液态玻璃
     case dark = "dark"           // 纯黑
     case tips = "tips"           // 护眼提示
-    case animation = "animation" // 动画引导
-    case scenery = "scenery"     // 自然风景
+    case lockScreen = "lockScreen" // 锁屏壁纸
     case custom = "custom"       // 自定义背景
     
     var displayName: String {
         switch self {
         case .blur: return "背景模糊"
+        case .liquidGlass: return "液态玻璃"
         case .dark: return "深色遮罩"
         case .tips: return "护眼提示"
-        case .animation: return "动画引导"
-        case .scenery: return "自然风景"
+        case .lockScreen: return "锁屏壁纸"
         case .custom: return "自定义背景"
         }
     }
@@ -46,10 +46,10 @@ enum BreakStyle: String, Codable, CaseIterable {
     var description: String {
         switch self {
         case .blur: return "屏幕渐变为毛玻璃效果，隐约可见但无法工作"
+        case .liquidGlass: return "macOS 26 风格的液态玻璃效果"
         case .dark: return "纯黑色背景，完全遮挡屏幕"
         case .tips: return "显示护眼小贴士，支持自定义内容"
-        case .animation: return "呼吸引导动画，帮助放松眼睛"
-        case .scenery: return "展示自然风景图片，舒缓心情"
+        case .lockScreen: return "使用系统锁屏壁纸作为背景"
         case .custom: return "使用你选择的图片作为背景"
         }
     }
@@ -57,10 +57,10 @@ enum BreakStyle: String, Codable, CaseIterable {
     var icon: String {
         switch self {
         case .blur: return "drop.fill"
+        case .liquidGlass: return "drop.halffull"
         case .dark: return "moon.fill"
         case .tips: return "text.bubble.fill"
-        case .animation: return "wind"
-        case .scenery: return "leaf.fill"
+        case .lockScreen: return "lock.desktopcomputer"
         case .custom: return "photo.fill"
         }
     }
