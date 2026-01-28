@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Combine
 
 /// 休息遮罩视图
 struct BreakOverlayView: View {
@@ -175,21 +176,79 @@ struct BreakOverlayView: View {
     }
 }
 
+// MARK: - Wallpaper Cache
+
+/// 壁纸缓存（单例，避免重复加载）
+@MainActor
+final class WallpaperCache: ObservableObject {
+    static let shared = WallpaperCache()
+    
+    @Published var image: NSImage?
+    @Published var isLoading = false
+    
+    private init() {
+        loadWallpaper()
+    }
+    
+    func loadWallpaper() {
+        guard !isLoading else { return }
+        isLoading = true
+        
+        // 获取壁纸 URL
+        guard let screen = NSScreen.main,
+              let wallpaperURL = NSWorkspace.shared.desktopImageURL(for: screen) else {
+            isLoading = false
+            loadFallback()
+            return
+        }
+        
+        // 在后台加载图片
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let loadedImage = NSImage(contentsOf: wallpaperURL)
+            DispatchQueue.main.async {
+                if let image = loadedImage {
+                    self?.image = image
+                } else {
+                    self?.loadFallback()
+                }
+                self?.isLoading = false
+            }
+        }
+    }
+    
+    private func loadFallback() {
+        let systemPath = "/System/Library/Desktop Pictures"
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            if let contents = try? FileManager.default.contentsOfDirectory(atPath: systemPath) {
+                let names = ["Sequoia", "Sonoma", "Ventura", "Monterey"]
+                for name in names {
+                    if let match = contents.first(where: { $0.contains(name) }),
+                       let image = NSImage(contentsOfFile: "\(systemPath)/\(match)") {
+                        DispatchQueue.main.async {
+                            self?.image = image
+                        }
+                        return
+                    }
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Desktop Wallpaper View
 
-/// 获取并显示当前桌面壁纸（完全异步加载，不阻塞 UI）
+/// 获取并显示当前桌面壁纸
 private struct DesktopWallpaperView: View {
-    @State private var wallpaperImage: NSImage?
-    @State private var isLoading = true
+    @ObservedObject private var cache = WallpaperCache.shared
     
     var body: some View {
         ZStack {
-            if let image = wallpaperImage {
+            if let image = cache.image {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } else {
-                // 加载中或回退：优雅的深色渐变背景
+                // 回退：深色渐变背景
                 LinearGradient(
                     colors: [
                         Color(red: 0.1, green: 0.1, blue: 0.15),
@@ -200,76 +259,12 @@ private struct DesktopWallpaperView: View {
                 )
             }
         }
-        .task {
-            await loadWallpaperAsync()
-        }
-    }
-    
-    /// 异步加载壁纸，不阻塞主线程
-    private func loadWallpaperAsync() async {
-        // 在后台线程执行 I/O 操作
-        let image = await Task.detached(priority: .userInitiated) {
-            return loadWallpaperImage()
-        }.value
-        
-        // 回到主线程更新 UI
-        await MainActor.run {
-            self.wallpaperImage = image
-            self.isLoading = false
-        }
-    }
-    
-    /// 同步加载壁纸图片（在后台线程调用）
-    private nonisolated func loadWallpaperImage() -> NSImage? {
-        // 方法1：通过 NSWorkspace 获取当前桌面壁纸
-        // 注意：NSWorkspace 需要在主线程调用，所以我们直接尝试读取文件
-        
-        // 方法2：直接读取壁纸配置获取路径
-        if let url = getWallpaperURLFromWorkspace(),
-           let image = NSImage(contentsOf: url) {
-            return image
-        }
-        
-        // 方法3：尝试从系统壁纸目录读取默认壁纸
-        let wallpaperPaths = [
-            "/System/Library/Desktop Pictures",
-            "\(NSHomeDirectory())/Library/Desktop Pictures"
-        ]
-        
-        for basePath in wallpaperPaths {
-            if let contents = try? FileManager.default.contentsOfDirectory(atPath: basePath) {
-                // 优先查找常见壁纸
-                let preferredNames = ["Sonoma", "Ventura", "Monterey", "Big Sur"]
-                for name in preferredNames {
-                    if let match = contents.first(where: { $0.contains(name) }),
-                       let image = NSImage(contentsOfFile: "\(basePath)/\(match)") {
-                        return image
-                    }
-                }
-                // 否则使用第一个图片
-                if let firstImage = contents.first(where: { 
-                    $0.hasSuffix(".heic") || $0.hasSuffix(".jpg") || $0.hasSuffix(".png") 
-                }),
-                   let image = NSImage(contentsOfFile: "\(basePath)/\(firstImage)") {
-                    return image
-                }
+        .onAppear {
+            // 如果还没有加载，触发加载
+            if cache.image == nil && !cache.isLoading {
+                cache.loadWallpaper()
             }
         }
-        
-        return nil
-    }
-    
-    /// 从 NSWorkspace 获取壁纸 URL（需要同步调用）
-    private nonisolated func getWallpaperURLFromWorkspace() -> URL? {
-        // 使用 DispatchQueue.main.sync 在主线程获取壁纸 URL
-        // 但只获取 URL，不加载图片
-        var result: URL?
-        DispatchQueue.main.sync {
-            if let screen = NSScreen.main {
-                result = NSWorkspace.shared.desktopImageURL(for: screen)
-            }
-        }
-        return result
     }
 }
 
