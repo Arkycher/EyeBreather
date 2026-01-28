@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import Combine
 
 /// 休息遮罩视图
 struct BreakOverlayView: View {
@@ -107,13 +106,9 @@ struct BreakOverlayView: View {
             Color.black.opacity(0.85)
         case .desktop:
             // 使用系统桌面壁纸
-            GeometryReader { geometry in
-                DesktopWallpaperView()
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .clipped()
-            }
-            .overlay(Color.black.opacity(0.3))
-            .blur(radius: 30)
+            DesktopWallpaperView()
+                .overlay(Color.black.opacity(0.3))
+                .blur(radius: 30)
         case .custom:
             if let path = settingsManager.settings.customBackgroundPath,
                let nsImage = NSImage(contentsOfFile: path) {
@@ -176,74 +171,15 @@ struct BreakOverlayView: View {
     }
 }
 
-// MARK: - Wallpaper Cache
-
-/// 壁纸缓存（单例，避免重复加载）
-@MainActor
-final class WallpaperCache: ObservableObject {
-    static let shared = WallpaperCache()
-    
-    @Published var image: NSImage?
-    @Published var isLoading = false
-    
-    private init() {
-        loadWallpaper()
-    }
-    
-    func loadWallpaper() {
-        guard !isLoading else { return }
-        isLoading = true
-        
-        // 获取壁纸 URL
-        guard let screen = NSScreen.main,
-              let wallpaperURL = NSWorkspace.shared.desktopImageURL(for: screen) else {
-            isLoading = false
-            loadFallback()
-            return
-        }
-        
-        // 在后台加载图片
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let loadedImage = NSImage(contentsOf: wallpaperURL)
-            DispatchQueue.main.async {
-                if let image = loadedImage {
-                    self?.image = image
-                } else {
-                    self?.loadFallback()
-                }
-                self?.isLoading = false
-            }
-        }
-    }
-    
-    private func loadFallback() {
-        let systemPath = "/System/Library/Desktop Pictures"
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            if let contents = try? FileManager.default.contentsOfDirectory(atPath: systemPath) {
-                let names = ["Sequoia", "Sonoma", "Ventura", "Monterey"]
-                for name in names {
-                    if let match = contents.first(where: { $0.contains(name) }),
-                       let image = NSImage(contentsOfFile: "\(systemPath)/\(match)") {
-                        DispatchQueue.main.async {
-                            self?.image = image
-                        }
-                        return
-                    }
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Desktop Wallpaper View
 
 /// 获取并显示当前桌面壁纸
 private struct DesktopWallpaperView: View {
-    @ObservedObject private var cache = WallpaperCache.shared
+    @State private var wallpaperImage: NSImage?
     
     var body: some View {
-        ZStack {
-            if let image = cache.image {
+        Group {
+            if let image = wallpaperImage {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -251,7 +187,7 @@ private struct DesktopWallpaperView: View {
                 // 回退：深色渐变背景
                 LinearGradient(
                     colors: [
-                        Color(red: 0.1, green: 0.1, blue: 0.15),
+                        Color(red: 0.1, green: 0.1, blue: 0.2),
                         Color(red: 0.05, green: 0.05, blue: 0.1)
                     ],
                     startPoint: .topLeading,
@@ -260,9 +196,31 @@ private struct DesktopWallpaperView: View {
             }
         }
         .onAppear {
-            // 如果还没有加载，触发加载
-            if cache.image == nil && !cache.isLoading {
-                cache.loadWallpaper()
+            loadWallpaper()
+        }
+    }
+    
+    private func loadWallpaper() {
+        // 通过 NSWorkspace 获取当前桌面壁纸
+        if let screen = NSScreen.main,
+           let wallpaperURL = NSWorkspace.shared.desktopImageURL(for: screen),
+           let image = NSImage(contentsOf: wallpaperURL) {
+            self.wallpaperImage = image
+            return
+        }
+        
+        // 回退：尝试从系统壁纸目录读取
+        let wallpaperPaths = [
+            "/System/Library/Desktop Pictures",
+            "\(NSHomeDirectory())/Library/Desktop Pictures"
+        ]
+        
+        for basePath in wallpaperPaths {
+            if let contents = try? FileManager.default.contentsOfDirectory(atPath: basePath),
+               let firstImage = contents.first(where: { $0.hasSuffix(".heic") || $0.hasSuffix(".jpg") }),
+               let image = NSImage(contentsOfFile: "\(basePath)/\(firstImage)") {
+                self.wallpaperImage = image
+                return
             }
         }
     }
