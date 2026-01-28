@@ -118,9 +118,15 @@ final class BreakWindowController: ObservableObject {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.isReleasedWhenClosed = false
         
-        // 设置内容视图
+        // 设置内容视图 - 确保填满整个窗口
         let breakView = BreakOverlayView()
-        window.contentView = NSHostingView(rootView: breakView)
+        let hostingView = NSHostingView(rootView: breakView)
+        hostingView.frame = NSRect(origin: .zero, size: screen.frame.size)
+        hostingView.autoresizingMask = [.width, .height]
+        window.contentView = hostingView
+        
+        // 确保窗口位置正确
+        window.setFrame(screen.frame, display: true)
         
         return window
     }
