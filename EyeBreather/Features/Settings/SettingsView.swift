@@ -38,215 +38,319 @@ struct SettingsView: View {
     @State private var selectedSection: SettingsSection = .breakRules
     
     var body: some View {
-        NavigationSplitView {
+        HStack(spacing: 0) {
             // 侧边栏
-            List(SettingsSection.allCases, selection: $selectedSection) { section in
-                Label(section.title, systemImage: section.icon)
-                    .tag(section)
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(SettingsSection.allCases) { section in
+                    SidebarItem(
+                        title: section.title,
+                        icon: section.icon,
+                        isSelected: selectedSection == section
+                    ) {
+                        selectedSection = section
+                    }
+                }
+                Spacer()
             }
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 150, ideal: 180)
-        } detail: {
+            .padding(.vertical, 12)
+            .padding(.horizontal, 8)
+            .frame(width: 160)
+            .background(.ultraThinMaterial)
+            
+            // 分隔线
+            Divider()
+            
             // 详情视图
-            switch selectedSection {
-            case .breakRules:
-                BreakRulesSection()
-            case .smartPause:
-                SmartPauseSection()
-            case .appearance:
-                AppearanceSection()
-            case .general:
-                GeneralSection()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    // 标题区域
+                    Text(selectedSection.title)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                        .padding(.bottom, 12)
+                    
+                    // 内容区域
+                    detailContent
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.regularMaterial)
         }
-        .frame(width: 550, height: 450)
+        .frame(width: 580, height: 480)
+    }
+    
+    @ViewBuilder
+    private var detailContent: some View {
+        switch selectedSection {
+        case .breakRules:
+            BreakRulesSectionContent()
+        case .smartPause:
+            SmartPauseSectionContent()
+        case .appearance:
+            AppearanceSectionContent()
+        case .general:
+            GeneralSectionContent()
+        }
     }
 }
 
-// MARK: - Break Rules Section
+// MARK: - Sidebar Item
 
-struct BreakRulesSection: View {
+struct SidebarItem: View {
+    let title: String
+    let icon: String
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .foregroundColor(isSelected ? .white : .primary)
+                    .frame(width: 20)
+                
+                Text(title)
+                    .font(.system(size: 13))
+                    .foregroundColor(isSelected ? .white : .primary)
+                
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Color.accentColor : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Settings Card
+
+struct SettingsCard<Content: View>: View {
+    let title: String
+    let footer: String?
+    @ViewBuilder let content: () -> Content
+    
+    init(title: String, footer: String? = nil, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.footer = footer
+        self.content = content
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+            
+            VStack(spacing: 0) {
+                content()
+            }
+            .background(.thickMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            
+            if let footer = footer {
+                Text(footer)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 2)
+            }
+        }
+    }
+}
+
+struct SettingsRow: View {
+    let title: String
+    var value: String? = nil
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .foregroundColor(.primary)
+            Spacer()
+            if let value = value {
+                Text(value)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+    }
+}
+
+// MARK: - Break Rules Section Content
+
+struct BreakRulesSectionContent: View {
     @ObservedObject private var settingsManager = SettingsManager.shared
     
     var body: some View {
-        Form {
-            Section {
-                // 工作时长
-                Stepper(value: $settingsManager.settings.workDuration, in: 1...120) {
-                    HStack {
-                        Text("工作时长")
-                        Spacer()
-                        Text("\(settingsManager.settings.workDuration) 分钟")
-                            .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 16) {
+            // 时间设置卡片
+            SettingsCard(title: "时间设置", footer: "推荐 20-20-20 法则：每 20 分钟休息 20 秒") {
+                VStack(spacing: 0) {
+                    Stepper(value: $settingsManager.settings.workDuration, in: 1...120) {
+                        SettingsRow(title: "工作时长", value: "\(settingsManager.settings.workDuration) 分钟")
                     }
-                }
-                
-                // 休息时长
-                Stepper(value: $settingsManager.settings.breakDuration, in: 5...300, step: 5) {
-                    HStack {
-                        Text("休息时长")
-                        Spacer()
-                        Text("\(settingsManager.settings.breakDuration) 秒")
-                            .foregroundColor(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    
+                    Divider().padding(.leading, 12)
+                    
+                    Stepper(value: $settingsManager.settings.breakDuration, in: 5...300, step: 5) {
+                        SettingsRow(title: "休息时长", value: "\(settingsManager.settings.breakDuration) 秒")
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
                 }
-            } header: {
-                Text("时间设置")
-            } footer: {
-                Text("推荐采用 20-20-20 法则：每工作 20 分钟，休息 20 秒，看向 20 英尺外")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
             
-            Section {
-                // 提醒模式
-                Picker("提醒模式", selection: $settingsManager.settings.reminderMode) {
-                    ForEach(ReminderMode.allCases, id: \.self) { mode in
-                        Text(mode.displayName).tag(mode)
-                    }
-                }
-                
-                // 显示模式描述
-                Text(settingsManager.settings.reminderMode.description)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            } header: {
-                Text("提醒方式")
-            }
-            
-            Section {
-                // 休息预警
-                Stepper(value: $settingsManager.settings.preBreakWarning, in: 0...300, step: 10) {
-                    HStack {
-                        Text("休息预警")
-                        Spacer()
-                        if settingsManager.settings.preBreakWarning > 0 {
-                            Text("\(settingsManager.settings.preBreakWarning) 秒前提醒")
-                                .foregroundColor(.secondary)
-                        } else {
-                            Text("关闭")
-                                .foregroundColor(.secondary)
+            // 提醒方式卡片
+            SettingsCard(title: "提醒方式") {
+                VStack(spacing: 0) {
+                    Picker("", selection: $settingsManager.settings.reminderMode) {
+                        ForEach(ReminderMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
                         }
                     }
+                    .pickerStyle(.segmented)
+                    .padding(12)
+                    
+                    Divider().padding(.leading, 12)
+                    
+                    Text(settingsManager.settings.reminderMode.description)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
                 }
-            } header: {
-                Text("预警设置")
-            } footer: {
-                Text("在休息开始前提前通知，让你有准备时间")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            }
+            
+            // 预警设置卡片
+            SettingsCard(title: "预警设置", footer: "休息开始前提前通知") {
+                Stepper(value: $settingsManager.settings.preBreakWarning, in: 0...300, step: 10) {
+                    SettingsRow(
+                        title: "休息预警",
+                        value: settingsManager.settings.preBreakWarning > 0 
+                            ? "\(settingsManager.settings.preBreakWarning) 秒前" 
+                            : "关闭"
+                    )
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
             }
         }
-        .formStyle(.grouped)
-        .navigationTitle("休息规则")
     }
 }
 
-// MARK: - Smart Pause Section
+// MARK: - Smart Pause Section Content
 
-struct SmartPauseSection: View {
+struct SmartPauseSectionContent: View {
     @ObservedObject private var settingsManager = SettingsManager.shared
     @State private var showingAppPicker = false
     
     var body: some View {
-        Form {
-            Section {
-                // 会议检测开关
-                Toggle("会议检测", isOn: $settingsManager.settings.enableMeetingDetection)
-            } header: {
-                Text("会议检测")
-            } footer: {
-                Text("检测摄像头和麦克风使用，会议期间自动暂停提醒")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 16) {
+            // 会议检测卡片
+            SettingsCard(title: "会议检测", footer: "摄像头/麦克风使用时自动暂停") {
+                Toggle(isOn: $settingsManager.settings.enableMeetingDetection) {
+                    SettingsRow(title: "自动检测会议")
+                }
+                .toggleStyle(.switch)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
             }
             
-            Section {
-                // 专注模式应用列表
-                ForEach(settingsManager.settings.focusApps) { app in
-                    HStack {
-                        Image(systemName: app.isPreset ? "app.fill" : "app")
-                            .foregroundColor(.accentColor)
-                        
-                        Text(app.name)
-                        
-                        Spacer()
-                        
-                        if app.isPreset {
-                            Text("预设")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.secondary.opacity(0.1))
-                                .cornerRadius(4)
+            // 专注模式应用卡片
+            SettingsCard(title: "专注模式应用 (\(settingsManager.settings.focusApps.count))", footer: "这些应用在前台时不会触发休息提醒") {
+                VStack(spacing: 0) {
+                    ForEach(Array(settingsManager.settings.focusApps.enumerated()), id: \.element.id) { index, app in
+                        if index > 0 {
+                            Divider().padding(.leading, 44)
                         }
                         
-                        Button(action: {
-                            removeFromFocusApps(app.bundleId)
-                        }) {
-                            Image(systemName: "minus.circle.fill")
-                                .foregroundColor(.red.opacity(0.8))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                
-                // 添加应用按钮
-                Button(action: {
-                    showingAppPicker = true
-                }) {
-                    Label("添加应用...", systemImage: "plus.circle")
-                }
-            } header: {
-                HStack {
-                    Text("专注模式应用")
-                    Spacer()
-                    Text("\(settingsManager.settings.focusApps.count) 个应用")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            } footer: {
-                Text("这些应用在前台运行时，不会触发休息提醒")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            Section {
-                // 活动检测
-                Toggle("活动检测", isOn: $settingsManager.settings.enableActivityDetection)
-                
-                if settingsManager.settings.enableActivityDetection {
-                    Stepper(value: $settingsManager.settings.idleResetThreshold, in: 1...60) {
-                        HStack {
-                            Text("空闲重置阈值")
+                        HStack(spacing: 10) {
+                            Image(systemName: "app.fill")
+                                .foregroundColor(.accentColor)
+                                .frame(width: 20)
+                            
+                            Text(app.name)
+                                .lineLimit(1)
+                            
                             Spacer()
-                            Text("\(settingsManager.settings.idleResetThreshold) 分钟")
-                                .foregroundColor(.secondary)
+                            
+                            if app.isPreset {
+                                Text("预设")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.secondary.opacity(0.15))
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                            }
+                            
+                            Button {
+                                removeFromFocusApps(app.bundleId)
+                            } label: {
+                                Image(systemName: "minus.circle.fill")
+                                    .foregroundColor(.red.opacity(0.7))
+                            }
+                            .buttonStyle(.plain)
                         }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
                     }
+                    
+                    Divider().padding(.leading, 44)
+                    
+                    Button {
+                        showingAppPicker = true
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "plus.circle")
+                                .foregroundColor(.accentColor)
+                                .frame(width: 20)
+                            Text("添加应用...")
+                                .foregroundColor(.accentColor)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
                 }
-            } header: {
-                Text("活动检测")
-            } footer: {
-                Text("检测鼠标和键盘活动，长时间空闲后自动重置计时器")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
             
-            Section {
-                // 智能推荐
-                Toggle("智能推荐", isOn: $settingsManager.settings.enableSmartRecommend)
-            } header: {
-                Text("智能推荐")
-            } footer: {
-                Text("根据你的使用习惯，智能推荐添加专注模式应用")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+            // 活动检测卡片
+            SettingsCard(title: "活动检测", footer: "长时间空闲后自动重置计时器") {
+                VStack(spacing: 0) {
+                    Toggle(isOn: $settingsManager.settings.enableActivityDetection) {
+                        SettingsRow(title: "检测用户活动")
+                    }
+                    .toggleStyle(.switch)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    
+                    if settingsManager.settings.enableActivityDetection {
+                        Divider().padding(.leading, 12)
+                        
+                        Stepper(value: $settingsManager.settings.idleResetThreshold, in: 1...60) {
+                            SettingsRow(title: "空闲阈值", value: "\(settingsManager.settings.idleResetThreshold) 分钟")
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                    }
+                }
             }
         }
-        .formStyle(.grouped)
-        .navigationTitle("智能暂停")
         .sheet(isPresented: $showingAppPicker) {
             AppPickerView { bundleId, name in
                 addToFocusApps(bundleId, name: name)
@@ -255,7 +359,6 @@ struct SmartPauseSection: View {
     }
     
     private func addToFocusApps(_ bundleId: String, name: String) {
-        // 检查是否已存在
         guard !settingsManager.settings.focusApps.contains(where: { $0.bundleId == bundleId }) else {
             return
         }
@@ -286,9 +389,10 @@ struct AppPickerView: View {
                 Button("取消") {
                     dismiss()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.bordered)
             }
             .padding()
+            .background(.ultraThinMaterial)
             
             Divider()
             
@@ -298,36 +402,47 @@ struct AppPickerView: View {
                 .padding()
             
             // 应用列表
-            List(filteredApps, id: \.bundleId) { app in
-                Button(action: {
-                    onSelect(app.bundleId, app.name)
-                    dismiss()
-                }) {
-                    HStack {
-                        if let icon = app.icon {
-                            Image(nsImage: icon)
-                                .resizable()
-                                .frame(width: 24, height: 24)
-                        } else {
-                            Image(systemName: "app")
-                                .frame(width: 24, height: 24)
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(filteredApps.enumerated()), id: \.element.bundleId) { index, app in
+                        if index > 0 {
+                            Divider().padding(.leading, 44)
                         }
                         
-                        Text(app.name)
-                        
-                        Spacer()
-                        
-                        Text(app.bundleId)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
+                        Button {
+                            onSelect(app.bundleId, app.name)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 12) {
+                                if let icon = app.icon {
+                                    Image(nsImage: icon)
+                                        .resizable()
+                                        .frame(width: 24, height: 24)
+                                } else {
+                                    Image(systemName: "app")
+                                        .frame(width: 24, height: 24)
+                                }
+                                
+                                Text(app.name)
+                                    .foregroundColor(.primary)
+                                
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .background(.thickMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal)
             }
+            .padding(.bottom)
         }
-        .frame(width: 400, height: 350)
+        .frame(width: 380, height: 350)
+        .background(.regularMaterial)
     }
     
     private var runningApps: [(bundleId: String, name: String, icon: NSImage?)] {
@@ -349,62 +464,75 @@ struct AppPickerView: View {
     }
 }
 
-// MARK: - Appearance Section
+// MARK: - Appearance Section Content
 
-struct AppearanceSection: View {
+struct AppearanceSectionContent: View {
     @ObservedObject private var settingsManager = SettingsManager.shared
     
     var body: some View {
-        Form {
-            Section {
-                // 外观模式
-                Picker("外观模式", selection: $settingsManager.settings.appearance) {
+        VStack(alignment: .leading, spacing: 16) {
+            // 主题卡片
+            SettingsCard(title: "主题") {
+                Picker("", selection: $settingsManager.settings.appearance) {
                     ForEach(AppearanceMode.allCases, id: \.self) { mode in
                         Text(mode.displayName).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
-            } header: {
-                Text("主题")
+                .padding(12)
             }
             
-            Section {
-                // 休息界面样式
-                Picker("休息界面", selection: $settingsManager.settings.breakStyle) {
-                    ForEach(BreakStyle.allCases, id: \.self) { style in
-                        Text(style.displayName).tag(style)
-                    }
-                }
-                .pickerStyle(.radioGroup)
-                
-                if settingsManager.settings.breakStyle == .custom {
-                    HStack {
-                        if let path = settingsManager.settings.customBackgroundPath {
-                            Text(URL(fileURLWithPath: path).lastPathComponent)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
-                        } else {
-                            Text("未选择背景图片")
-                                .foregroundColor(.secondary)
+            // 休息界面样式卡片
+            SettingsCard(title: "休息界面样式", footer: "休息时显示的界面风格") {
+                VStack(spacing: 0) {
+                    ForEach(Array(BreakStyle.allCases.enumerated()), id: \.element) { index, style in
+                        if index > 0 {
+                            Divider().padding(.leading, 12)
                         }
                         
-                        Spacer()
-                        
-                        Button("选择图片...") {
-                            selectCustomBackground()
+                        HStack {
+                            Text(style.displayName)
+                            Spacer()
+                            if settingsManager.settings.breakStyle == style {
+                                Image(systemName: "checkmark")
+                                    .foregroundColor(.accentColor)
+                                    .fontWeight(.medium)
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            settingsManager.settings.breakStyle = style
                         }
                     }
+                    
+                    if settingsManager.settings.breakStyle == .custom {
+                        Divider().padding(.leading, 12)
+                        
+                        HStack {
+                            if let path = settingsManager.settings.customBackgroundPath {
+                                Text(URL(fileURLWithPath: path).lastPathComponent)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            } else {
+                                Text("未选择背景图片")
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Button("选择图片...") {
+                                selectCustomBackground()
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                    }
                 }
-            } header: {
-                Text("休息界面样式")
-            } footer: {
-                Text("选择休息时显示的界面风格")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
         }
-        .formStyle(.grouped)
-        .navigationTitle("外观")
     }
     
     private func selectCustomBackground() {
@@ -421,71 +549,82 @@ struct AppearanceSection: View {
     }
 }
 
-// MARK: - General Section
+// MARK: - General Section Content
 
-struct GeneralSection: View {
+struct GeneralSectionContent: View {
     @ObservedObject private var settingsManager = SettingsManager.shared
     @ObservedObject private var launchAtLoginManager = LaunchAtLoginManager.shared
     @State private var showingResetAlert = false
     
     var body: some View {
-        Form {
-            Section {
-                Toggle("开机自动启动", isOn: Binding(
-                    get: { launchAtLoginManager.isEnabled },
-                    set: { launchAtLoginManager.setEnabled($0) }
-                ))
-                
-                Toggle("在 Dock 中显示图标", isOn: Binding(
-                    get: { settingsManager.settings.showInDock },
-                    set: { newValue in
-                        settingsManager.settings.showInDock = newValue
-                        if let appDelegate = NSApp.delegate as? AppDelegate {
-                            appDelegate.updateDockIconVisibility(show: newValue)
-                        }
+        VStack(alignment: .leading, spacing: 16) {
+            // 启动卡片
+            SettingsCard(title: "启动") {
+                VStack(spacing: 0) {
+                    Toggle(isOn: Binding(
+                        get: { launchAtLoginManager.isEnabled },
+                        set: { launchAtLoginManager.setEnabled($0) }
+                    )) {
+                        SettingsRow(title: "开机自动启动")
                     }
-                ))
-            } header: {
-                Text("启动")
+                    .toggleStyle(.switch)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    
+                    Divider().padding(.leading, 12)
+                    
+                    Toggle(isOn: Binding(
+                        get: { settingsManager.settings.showInDock },
+                        set: { newValue in
+                            settingsManager.settings.showInDock = newValue
+                            if let appDelegate = NSApp.delegate as? AppDelegate {
+                                appDelegate.updateDockIconVisibility(show: newValue)
+                            }
+                        }
+                    )) {
+                        SettingsRow(title: "在 Dock 中显示图标")
+                    }
+                    .toggleStyle(.switch)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                }
             }
             
-            Section {
-                Button(role: .destructive) {
+            // 重置卡片
+            SettingsCard(title: "重置", footer: "将所有设置恢复为默认值") {
+                Button {
                     showingResetAlert = true
                 } label: {
                     HStack {
                         Image(systemName: "arrow.counterclockwise")
+                            .foregroundColor(.red)
                         Text("重置为默认设置")
+                            .foregroundColor(.red)
+                        Spacer()
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
                 }
-            } header: {
-                Text("重置")
-            } footer: {
-                Text("将所有设置恢复为默认值")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                .buttonStyle(.plain)
             }
             
-            Section {
-                HStack {
-                    Text("版本")
-                    Spacer()
-                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
-                        .foregroundColor(.secondary)
+            // 关于卡片
+            SettingsCard(title: "关于") {
+                VStack(spacing: 0) {
+                    SettingsRow(
+                        title: "版本",
+                        value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+                    )
+                    
+                    Divider().padding(.leading, 12)
+                    
+                    SettingsRow(
+                        title: "构建",
+                        value: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+                    )
                 }
-                
-                HStack {
-                    Text("构建")
-                    Spacer()
-                    Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1")
-                        .foregroundColor(.secondary)
-                }
-            } header: {
-                Text("关于")
             }
         }
-        .formStyle(.grouped)
-        .navigationTitle("通用")
         .alert("重置设置", isPresented: $showingResetAlert) {
             Button("取消", role: .cancel) { }
             Button("重置", role: .destructive) {
