@@ -54,9 +54,9 @@ struct SettingsView: View {
             }
             .padding(.top, 12)
             .padding(.horizontal, 8)
-            .frame(width: 160)
+            .frame(width: DesignConstants.Sidebar.width)
             .frame(maxHeight: .infinity)
-            .background(Color(nsColor: NSColor(white: 0.94, alpha: 1.0)))
+            .background(DesignConstants.Sidebar.backgroundColor)
             
             // 内容区 - 渐变背景
             ScrollView {
@@ -89,7 +89,7 @@ struct SettingsView: View {
                 )
             )
         }
-        .frame(width: 640, height: 520)
+        .frame(width: DesignConstants.SettingsWindow.width, height: DesignConstants.SettingsWindow.height)
     }
     
     @ViewBuilder
@@ -134,10 +134,10 @@ struct SurgeSidebarItem: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: DesignConstants.CornerRadius.sm)
                 .fill(isSelected 
-                    ? Color(nsColor: NSColor(white: 0.86, alpha: 1.0))
-                    : (isHovering ? Color(nsColor: NSColor(white: 0.90, alpha: 1.0)) : Color.clear)
+                    ? DesignConstants.Sidebar.selectedColor
+                    : (isHovering ? DesignConstants.Sidebar.hoverColor : Color.clear)
                 )
         )
         .contentShape(Rectangle())
@@ -175,8 +175,13 @@ struct SettingsCard<Content: View>: View {
                 content()
             }
             .background(Color.white)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 2)
+            .clipShape(RoundedRectangle(cornerRadius: DesignConstants.CornerRadius.lg))
+            .shadow(
+                color: Color.black.opacity(DesignConstants.Card.shadowOpacity),
+                radius: DesignConstants.Card.shadowRadius,
+                x: 0,
+                y: DesignConstants.Card.shadowY
+            )
             
             if let footer = footer {
                 Text(footer)

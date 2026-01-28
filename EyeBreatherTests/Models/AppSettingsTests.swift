@@ -3,6 +3,12 @@ import XCTest
 
 final class AppSettingsTests: XCTestCase {
     
+    override func setUp() {
+        super.setUp()
+        // 测试前清理数据
+        UserDefaults.standard.removeObject(forKey: "com.eyebreather.settings")
+    }
+    
     override func tearDown() {
         // 清理测试数据
         UserDefaults.standard.removeObject(forKey: "com.eyebreather.settings")

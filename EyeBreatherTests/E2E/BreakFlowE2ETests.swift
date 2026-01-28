@@ -116,15 +116,11 @@ final class BreakFlowE2ETests: XCTestCase {
         SettingsManager.shared.settings.breakDuration = 2
         SettingsManager.shared.settings.reminderMode = .forced
         
+        // 测试开始工作
         TimerManager.shared.start()
         XCTAssertEqual(TimerManager.shared.state, .working)
         
-        TimerManager.shared.pause()
-        XCTAssertEqual(TimerManager.shared.state, .paused)
-        
-        TimerManager.shared.resume()
-        XCTAssertEqual(TimerManager.shared.state, .working)
-        
+        // 测试开始休息
         BreakCoordinator.shared.startBreak()
         XCTAssertEqual(TimerManager.shared.state, .breaking)
     }

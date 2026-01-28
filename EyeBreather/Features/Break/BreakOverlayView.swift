@@ -70,21 +70,20 @@ struct BreakOverlayView: View {
         case .liquidGlass:
             // 液态玻璃效果 - macOS 26 原生 API
             if #available(macOS 26, *) {
-                ZStack {
-                    // 渐变背景增强玻璃折射效果
-                    LinearGradient(
-                        colors: [
-                            Color.blue.opacity(0.2),
-                            Color.purple.opacity(0.15),
-                            Color.pink.opacity(0.15)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+                // 原生液态玻璃效果 - 使用 .rect 填充全屏
+                Color.clear
+                    .glassEffect(in: .rect)
+                    .background(
+                        LinearGradient(
+                            colors: [
+                                Color.blue.opacity(0.1),
+                                Color.purple.opacity(0.08),
+                                Color.pink.opacity(0.08)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                    // 原生液态玻璃效果
-                    Color.clear
-                        .glassEffect()
-                }
             } else {
                 // 回退方案：渐变 + 毛玻璃
                 ZStack {
@@ -105,18 +104,11 @@ struct BreakOverlayView: View {
             Color.black.opacity(0.95)
         case .tips:
             Color.black.opacity(0.85)
-        case .lockScreen:
-            // 使用系统锁屏壁纸
-            if let wallpaperURL = NSWorkspace.shared.desktopImageURL(for: NSScreen.main ?? NSScreen.screens[0]),
-               let nsImage = NSImage(contentsOf: wallpaperURL) {
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .overlay(Color.black.opacity(0.4))
-                    .blur(radius: 20)
-            } else {
-                Color.black.opacity(0.9)
-            }
+        case .desktop:
+            // 使用系统桌面壁纸
+            DesktopWallpaperView()
+                .overlay(Color.black.opacity(0.3))
+                .blur(radius: 30)
         case .custom:
             if let path = settingsManager.settings.customBackgroundPath,
                let nsImage = NSImage(contentsOfFile: path) {
@@ -161,6 +153,61 @@ struct BreakOverlayView: View {
     private func delayBreak(minutes: Int) {
         timerManager.delayBreak(minutes: minutes)
         BreakWindowController.shared.hideOverlay()
+    }
+}
+
+// MARK: - Desktop Wallpaper View
+
+/// 获取并显示当前桌面壁纸
+private struct DesktopWallpaperView: View {
+    @State private var wallpaperImage: NSImage?
+    
+    var body: some View {
+        Group {
+            if let image = wallpaperImage {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                // 回退：优雅的深色渐变背景
+                LinearGradient(
+                    colors: [
+                        Color(red: 0.1, green: 0.1, blue: 0.2),
+                        Color(red: 0.05, green: 0.05, blue: 0.1)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+        }
+        .onAppear {
+            loadWallpaper()
+        }
+    }
+    
+    private func loadWallpaper() {
+        // 方法1：通过 NSWorkspace 获取当前桌面壁纸
+        if let screen = NSScreen.main,
+           let wallpaperURL = NSWorkspace.shared.desktopImageURL(for: screen),
+           let image = NSImage(contentsOf: wallpaperURL) {
+            self.wallpaperImage = image
+            return
+        }
+        
+        // 方法2：尝试从系统壁纸目录读取
+        let wallpaperPaths = [
+            "/System/Library/Desktop Pictures",
+            "\(NSHomeDirectory())/Library/Desktop Pictures"
+        ]
+        
+        for basePath in wallpaperPaths {
+            if let contents = try? FileManager.default.contentsOfDirectory(atPath: basePath),
+               let firstImage = contents.first(where: { $0.hasSuffix(".heic") || $0.hasSuffix(".jpg") }),
+               let image = NSImage(contentsOfFile: "\(basePath)/\(firstImage)") {
+                self.wallpaperImage = image
+                return
+            }
+        }
     }
 }
 

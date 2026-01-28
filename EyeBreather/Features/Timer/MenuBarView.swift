@@ -6,6 +6,7 @@ struct MenuBarView: View {
     @ObservedObject private var timerManager = TimerManager.shared
     @ObservedObject private var appDetector = AppDetector.shared
     @ObservedObject private var mediaMonitor = MediaDeviceMonitor.shared
+    @ObservedObject private var statisticsManager = BreakStatisticsManager.shared
     
     @Environment(\.modelContext) private var modelContext
     
@@ -190,33 +191,40 @@ struct MenuBarView: View {
     // MARK: - Today Stats
     
     private var todayStatsView: some View {
-        HStack {
-            Label {
-                Text("--:--")
-                    .font(.subheadline.monospacedDigit())
-            } icon: {
-                Image(systemName: "clock")
+        VStack(spacing: 4) {
+            HStack {
+                Text("今日已休息")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                Spacer()
+                Text("\(statisticsManager.todayStatistics.completedBreaks) 次")
+                    .font(.caption)
+                    .foregroundColor(.primary)
             }
             
-            Spacer()
-            
-            Text("·")
-                .foregroundColor(.secondary)
-            
-            Spacer()
-            
-            Label {
-                Text("休息 0/0")
-                    .font(.subheadline.monospacedDigit())
-            } icon: {
-                Image(systemName: "checkmark.circle")
+            HStack {
+                Text("已跳过")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                Spacer()
+                Text("\(statisticsManager.todayStatistics.skippedBreaks) 次")
+                    .font(.caption)
+                    .foregroundColor(.primary)
+            }
+            
+            if statisticsManager.todayStatistics.totalBreaks > 0 {
+                HStack {
+                    Text("完成率")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text(String(format: "%.0f%%", statisticsManager.todayStatistics.completionRate * 100))
+                        .font(.caption)
+                        .foregroundColor(statisticsManager.todayStatistics.completionRate >= 0.8 ? .green : .orange)
+                }
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 16)
     }
     
     // MARK: - Toolbar

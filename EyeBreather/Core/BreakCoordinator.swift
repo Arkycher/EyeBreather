@@ -93,12 +93,18 @@ final class BreakCoordinator {
     }
     
     private func handleBreakTimeReached() {
+        // 检查勿扰时段
+        guard !DoNotDisturbManager.shared.isInDoNotDisturbPeriod else { return }
+        
         // 检查是否应该暂停
         guard !AppDetector.shared.shouldPauseReminder else { return }
         
         // 防止重复触发
         guard !breakTriggered else { return }
         breakTriggered = true
+        
+        // 检查新的一天，重置统计
+        BreakStatisticsManager.shared.resetConsecutiveSkipsIfNewDay()
         
         let settings = SettingsManager.shared.settings
         
@@ -113,10 +119,15 @@ final class BreakCoordinator {
             scheduleAutoBreak()
             
         case .progressive:
-            // 渐进模式：根据跳过次数决定
-            // TODO: 实现渐进逻辑
-            sendBreakNotification()
-            scheduleAutoBreak()
+            // 渐进模式：根据连续跳过次数决定
+            if BreakStatisticsManager.shared.shouldForceBreak {
+                // 跳过次数达到阈值，强制休息
+                startBreak()
+            } else {
+                // 还可以跳过，发送通知
+                sendBreakNotification()
+                scheduleAutoBreak()
+            }
         }
     }
     
@@ -142,19 +153,12 @@ final class BreakCoordinator {
     }
     
     private func handleBreakCompleted() {
-        // 重置触发标记
         breakTriggered = false
-        
-        // 隐藏遮罩
         BreakWindowController.shared.hideOverlay()
-        
-        // 完成休息
         TimerManager.shared.completeBreak()
-        
-        // 记录到统计
         recordBreakCompleted()
+        SoundManager.shared.playBreakEndSound()
         
-        // 发送完成通知
         sendNotification(
             title: "休息完成",
             body: "休息完成，继续工作吧！"
@@ -184,6 +188,7 @@ final class BreakCoordinator {
     
     func startBreak() {
         cancelAutoBreak()
+        SoundManager.shared.playBreakStartSound()
         TimerManager.shared.startBreak()
         BreakWindowController.shared.showOverlay()
     }
@@ -206,13 +211,12 @@ final class BreakCoordinator {
     // MARK: - Statistics Recording
     
     private func recordBreakCompleted() {
-        // TODO: 记录到 SwiftData
-        // 需要在 DailyStatistics 中增加 completedBreaks
+        let breakDuration = SettingsManager.shared.settings.breakDuration
+        BreakStatisticsManager.shared.recordBreakCompleted(durationSeconds: breakDuration)
     }
     
     private func recordBreakSkipped() {
-        // TODO: 记录到 SwiftData
-        // 需要在 DailyStatistics 中增加 skippedBreaks
+        BreakStatisticsManager.shared.recordBreakSkipped()
     }
     
     // MARK: - Notifications

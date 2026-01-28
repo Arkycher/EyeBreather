@@ -29,7 +29,7 @@ enum BreakStyle: String, Codable, CaseIterable {
     case liquidGlass = "liquidGlass" // 液态玻璃
     case dark = "dark"           // 纯黑
     case tips = "tips"           // 护眼提示
-    case lockScreen = "lockScreen" // 锁屏壁纸
+    case desktop = "desktop"     // 桌面壁纸
     case custom = "custom"       // 自定义背景
     
     var displayName: String {
@@ -38,7 +38,7 @@ enum BreakStyle: String, Codable, CaseIterable {
         case .liquidGlass: return "液态玻璃"
         case .dark: return "深色遮罩"
         case .tips: return "护眼提示"
-        case .lockScreen: return "锁屏壁纸"
+        case .desktop: return "桌面壁纸"
         case .custom: return "自定义背景"
         }
     }
@@ -49,7 +49,7 @@ enum BreakStyle: String, Codable, CaseIterable {
         case .liquidGlass: return "macOS 26 风格的液态玻璃效果"
         case .dark: return "纯黑色背景，完全遮挡屏幕"
         case .tips: return "显示护眼小贴士，支持自定义内容"
-        case .lockScreen: return "使用系统锁屏壁纸作为背景"
+        case .desktop: return "使用当前桌面壁纸 + 模糊效果"
         case .custom: return "使用你选择的图片作为背景"
         }
     }
@@ -60,7 +60,7 @@ enum BreakStyle: String, Codable, CaseIterable {
         case .liquidGlass: return "drop.halffull"
         case .dark: return "moon.fill"
         case .tips: return "text.bubble.fill"
-        case .lockScreen: return "lock.desktopcomputer"
+        case .desktop: return "desktopcomputer"
         case .custom: return "photo.fill"
         }
     }

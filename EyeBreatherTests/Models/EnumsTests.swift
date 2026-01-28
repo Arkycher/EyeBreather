@@ -21,7 +21,8 @@ final class EnumsTests: XCTestCase {
     // MARK: - BreakStyle Tests
     
     func testBreakStyleCaseIterable() {
-        XCTAssertEqual(BreakStyle.allCases.count, 5)
+        // 6 cases: blur, liquidGlass, dark, tips, desktop, custom
+        XCTAssertEqual(BreakStyle.allCases.count, 6)
     }
     
     func testBreakStyleDisplayNames() {

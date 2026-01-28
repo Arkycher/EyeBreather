@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 /// 每日休息统计
 struct DailyBreakStatistics: Codable, Equatable {
@@ -25,14 +26,15 @@ final class BreakStatisticsManager: ObservableObject {
     private static let storageKey = "com.eyebreather.statistics"
     
     @Published private(set) var todayStatistics: DailyBreakStatistics
-    @Published private(set) var allStatistics: [DailyBreakStatistics] = []
+    @Published private(set) var allStatistics: [DailyBreakStatistics]
     
     /// 渐进模式：连续跳过次数
-    @Published private(set) var consecutiveSkips: Int = 0
+    @Published private(set) var consecutiveSkips: Int
     
     private init() {
-        self.allStatistics = Self.loadAll()
-        self.todayStatistics = Self.loadToday(from: allStatistics)
+        let loadedStats = Self.loadAll()
+        self.allStatistics = loadedStats
+        self.todayStatistics = Self.loadToday(from: loadedStats)
         self.consecutiveSkips = UserDefaults.standard.integer(forKey: "consecutiveSkips")
     }
     
