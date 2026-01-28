@@ -177,21 +177,22 @@ struct BreakOverlayView: View {
 
 // MARK: - Desktop Wallpaper View
 
-/// 获取并显示当前桌面壁纸
+/// 获取并显示当前桌面壁纸（完全异步加载，不阻塞 UI）
 private struct DesktopWallpaperView: View {
     @State private var wallpaperImage: NSImage?
+    @State private var isLoading = true
     
     var body: some View {
-        Group {
+        ZStack {
             if let image = wallpaperImage {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } else {
-                // 回退：优雅的深色渐变背景
+                // 加载中或回退：优雅的深色渐变背景
                 LinearGradient(
                     colors: [
-                        Color(red: 0.1, green: 0.1, blue: 0.2),
+                        Color(red: 0.1, green: 0.1, blue: 0.15),
                         Color(red: 0.05, green: 0.05, blue: 0.1)
                     ],
                     startPoint: .topLeading,
@@ -199,60 +200,76 @@ private struct DesktopWallpaperView: View {
                 )
             }
         }
-        .onAppear {
-            loadWallpaper()
+        .task {
+            await loadWallpaperAsync()
         }
     }
     
-    private func loadWallpaper() {
+    /// 异步加载壁纸，不阻塞主线程
+    private func loadWallpaperAsync() async {
+        // 在后台线程执行 I/O 操作
+        let image = await Task.detached(priority: .userInitiated) {
+            return loadWallpaperImage()
+        }.value
+        
+        // 回到主线程更新 UI
+        await MainActor.run {
+            self.wallpaperImage = image
+            self.isLoading = false
+        }
+    }
+    
+    /// 同步加载壁纸图片（在后台线程调用）
+    private nonisolated func loadWallpaperImage() -> NSImage? {
         // 方法1：通过 NSWorkspace 获取当前桌面壁纸
-        if let screen = NSScreen.main,
-           let wallpaperURL = NSWorkspace.shared.desktopImageURL(for: screen),
-           let image = NSImage(contentsOf: wallpaperURL) {
-            self.wallpaperImage = image
-            return
+        // 注意：NSWorkspace 需要在主线程调用，所以我们直接尝试读取文件
+        
+        // 方法2：直接读取壁纸配置获取路径
+        if let url = getWallpaperURLFromWorkspace(),
+           let image = NSImage(contentsOf: url) {
+            return image
         }
         
-        // 方法2：通过 AppleScript 获取壁纸路径
-        if let path = getWallpaperPathViaAppleScript(),
-           let image = NSImage(contentsOfFile: path) {
-            self.wallpaperImage = image
-            return
-        }
-        
-        // 方法3：尝试从系统壁纸目录读取
+        // 方法3：尝试从系统壁纸目录读取默认壁纸
         let wallpaperPaths = [
             "/System/Library/Desktop Pictures",
             "\(NSHomeDirectory())/Library/Desktop Pictures"
         ]
         
         for basePath in wallpaperPaths {
-            if let contents = try? FileManager.default.contentsOfDirectory(atPath: basePath),
-               let firstImage = contents.first(where: { $0.hasSuffix(".heic") || $0.hasSuffix(".jpg") || $0.hasSuffix(".png") }),
-               let image = NSImage(contentsOfFile: "\(basePath)/\(firstImage)") {
-                self.wallpaperImage = image
-                return
+            if let contents = try? FileManager.default.contentsOfDirectory(atPath: basePath) {
+                // 优先查找常见壁纸
+                let preferredNames = ["Sonoma", "Ventura", "Monterey", "Big Sur"]
+                for name in preferredNames {
+                    if let match = contents.first(where: { $0.contains(name) }),
+                       let image = NSImage(contentsOfFile: "\(basePath)/\(match)") {
+                        return image
+                    }
+                }
+                // 否则使用第一个图片
+                if let firstImage = contents.first(where: { 
+                    $0.hasSuffix(".heic") || $0.hasSuffix(".jpg") || $0.hasSuffix(".png") 
+                }),
+                   let image = NSImage(contentsOfFile: "\(basePath)/\(firstImage)") {
+                    return image
+                }
             }
         }
+        
+        return nil
     }
     
-    private func getWallpaperPathViaAppleScript() -> String? {
-        let script = """
-        tell application "System Events"
-            tell current desktop
-                return picture as text
-            end tell
-        end tell
-        """
-        
-        var error: NSDictionary?
-        if let appleScript = NSAppleScript(source: script) {
-            let result = appleScript.executeAndReturnError(&error)
-            if error == nil, let path = result.stringValue {
-                return path
+    /// 从 NSWorkspace 获取壁纸 URL（需要同步调用）
+    private nonisolated func getWallpaperURLFromWorkspace() -> URL? {
+        // 使用 DispatchQueue.main.sync 在主线程获取壁纸 URL
+        // 但只获取 URL，不加载图片
+        var result: URL?
+        DispatchQueue.main.sync {
+            if let screen = NSScreen.main {
+                result = NSWorkspace.shared.desktopImageURL(for: screen)
             }
         }
-        return nil
+        return result
     }
 }
 
