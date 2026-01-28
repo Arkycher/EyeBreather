@@ -492,17 +492,33 @@ struct AppearanceSectionContent: View {
                 .padding(12)
             }
             
-            // 休息界面样式卡片
-            SettingsCard(title: "休息界面样式", footer: "休息时显示的界面风格") {
+            // 休息界面样式卡片 - 带图标和描述
+            SettingsCard(title: "休息界面样式") {
                 VStack(spacing: 0) {
                     ForEach(Array(BreakStyle.allCases.enumerated()), id: \.element) { index, style in
                         if index > 0 {
-                            Divider().padding(.leading, 12)
+                            Divider().padding(.leading, 44)
                         }
                         
-                        HStack {
-                            Text(style.displayName)
+                        HStack(spacing: 12) {
+                            // 图标
+                            Image(systemName: style.icon)
+                                .font(.system(size: 16))
+                                .foregroundColor(settingsManager.settings.breakStyle == style ? .accentColor : .secondary)
+                                .frame(width: 24)
+                            
+                            // 标题和描述
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(style.displayName)
+                                    .font(.system(size: 14))
+                                Text(style.description)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+                            
                             Spacer()
+                            
                             if settingsManager.settings.breakStyle == style {
                                 Image(systemName: "checkmark")
                                     .foregroundColor(.accentColor)
@@ -516,30 +532,45 @@ struct AppearanceSectionContent: View {
                             settingsManager.settings.breakStyle = style
                         }
                     }
-                    
-                    if settingsManager.settings.breakStyle == .custom {
-                        Divider().padding(.leading, 12)
+                }
+            }
+            
+            // 自定义背景图片（仅当选择自定义背景时显示）
+            if settingsManager.settings.breakStyle == .custom {
+                SettingsCard(title: "自定义背景") {
+                    HStack {
+                        Image(systemName: "photo")
+                            .foregroundColor(.secondary)
                         
-                        HStack {
-                            if let path = settingsManager.settings.customBackgroundPath {
-                                Text(URL(fileURLWithPath: path).lastPathComponent)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                            } else {
-                                Text("未选择背景图片")
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                            
-                            Button("选择图片...") {
-                                selectCustomBackground()
-                            }
-                            .buttonStyle(.bordered)
+                        if let path = settingsManager.settings.customBackgroundPath {
+                            Text(URL(fileURLWithPath: path).lastPathComponent)
+                                .foregroundColor(.primary)
+                                .lineLimit(1)
+                        } else {
+                            Text("未选择图片")
+                                .foregroundColor(.secondary)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
+                        
+                        Spacer()
+                        
+                        Button("选择...") {
+                            selectCustomBackground()
+                        }
+                        .buttonStyle(.bordered)
                     }
+                    .padding(12)
+                }
+            }
+            
+            // 自定义护眼提示（仅当选择护眼提示时显示）
+            if settingsManager.settings.breakStyle == .tips {
+                SettingsCard(title: "自定义提示内容", footer: "休息时显示的文字，支持换行") {
+                    TextEditor(text: $settingsManager.settings.customTipsText)
+                        .font(.system(size: 13))
+                        .frame(height: 80)
+                        .padding(8)
+                        .scrollContentBackground(.hidden)
+                        .background(Color.clear)
                 }
             }
         }

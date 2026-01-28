@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// 休息遮罩视图
 struct BreakOverlayView: View {
@@ -24,9 +25,10 @@ struct BreakOverlayView: View {
                     .monospacedDigit()
                 
                 // 提示文字
-                Text("看向远处，放松眼睛")
+                Text(tipsText)
                     .font(.title2)
                     .foregroundColor(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
                 
                 // 进度条
                 ProgressView(value: timerManager.breakProgress)
@@ -61,19 +63,39 @@ struct BreakOverlayView: View {
     @ViewBuilder
     private var backgroundView: some View {
         switch settingsManager.settings.breakStyle {
+        case .blur:
+            // 毛玻璃效果背景
+            Color.clear
+                .background(.ultraThinMaterial)
         case .dark:
             Color.black.opacity(0.95)
         case .tips:
-            Color.black.opacity(0.9)
+            Color.black.opacity(0.85)
         case .animation:
             Color.black.opacity(0.9)
         case .scenery:
             // TODO: 添加自然风景图片
             Color.black.opacity(0.9)
         case .custom:
-            // TODO: 添加自定义背景
-            Color.black.opacity(0.9)
+            if let path = settingsManager.settings.customBackgroundPath,
+               let nsImage = NSImage(contentsOfFile: path) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .overlay(Color.black.opacity(0.3))
+            } else {
+                Color.black.opacity(0.9)
+            }
         }
+    }
+    
+    // MARK: - Tips Content
+    
+    private var tipsText: String {
+        if settingsManager.settings.breakStyle == .tips {
+            return settingsManager.settings.customTipsText
+        }
+        return "看向远处，放松眼睛"
     }
     
     // MARK: - Computed Properties

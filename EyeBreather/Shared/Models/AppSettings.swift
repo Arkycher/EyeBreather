@@ -41,10 +41,13 @@ struct AppSettings: Codable, Equatable {
     // MARK: - 休息界面
     
     /// 休息界面样式
-    var breakStyle: BreakStyle = .dark
+    var breakStyle: BreakStyle = .blur
     
     /// 自定义背景图片路径
     var customBackgroundPath: String? = nil
+    
+    /// 自定义护眼提示文字
+    var customTipsText: String = "让眼睛休息一下\n看看远处，放松眼部肌肉"
     
     // MARK: - 通用
     
