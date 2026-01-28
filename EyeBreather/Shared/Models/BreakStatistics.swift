@@ -103,9 +103,7 @@ final class BreakStatisticsManager: ObservableObject {
     
     /// 渐进模式：是否应该强制休息
     var shouldForceBreak: Bool {
-        // TODO: 使用 SettingsManager.shared.settings.progressiveForceThreshold
-        // 该属性将在 Task 3 中添加，暂时使用硬编码值 3
-        let threshold = 3
+        let threshold = SettingsManager.shared.settings.progressiveForceThreshold
         return consecutiveSkips >= threshold
     }
     

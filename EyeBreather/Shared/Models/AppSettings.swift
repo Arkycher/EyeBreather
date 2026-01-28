@@ -19,6 +19,9 @@ struct AppSettings: Codable, Equatable {
     /// 延迟选项（分钟）
     var delayOptions: [Int] = [5, 15, 30]
     
+    /// 渐进模式：连续跳过多少次后强制休息
+    var progressiveForceThreshold: Int = 3
+    
     // MARK: - 智能检测
     
     /// 启用活动检测
@@ -48,6 +51,28 @@ struct AppSettings: Codable, Equatable {
     
     /// 自定义护眼提示文字
     var customTipsText: String = "让眼睛休息一下\n看看远处，放松眼部肌肉"
+    
+    // MARK: - 声音提醒
+    
+    /// 启用声音提醒
+    var enableSound: Bool = true
+    
+    /// 休息开始提示音
+    var breakStartSound: String = "default"
+    
+    /// 休息结束提示音
+    var breakEndSound: String = "default"
+    
+    // MARK: - 勿扰时段
+    
+    /// 启用勿扰时段
+    var enableDoNotDisturb: Bool = false
+    
+    /// 勿扰开始时间（小时，0-23）
+    var doNotDisturbStart: Int = 22
+    
+    /// 勿扰结束时间（小时，0-23）
+    var doNotDisturbEnd: Int = 8
     
     // MARK: - 通用
     
