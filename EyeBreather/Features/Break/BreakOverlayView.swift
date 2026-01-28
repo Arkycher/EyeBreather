@@ -213,7 +213,14 @@ private struct DesktopWallpaperView: View {
             return
         }
         
-        // 方法2：尝试从系统壁纸目录读取
+        // 方法2：通过 AppleScript 获取壁纸路径
+        if let path = getWallpaperPathViaAppleScript(),
+           let image = NSImage(contentsOfFile: path) {
+            self.wallpaperImage = image
+            return
+        }
+        
+        // 方法3：尝试从系统壁纸目录读取
         let wallpaperPaths = [
             "/System/Library/Desktop Pictures",
             "\(NSHomeDirectory())/Library/Desktop Pictures"
@@ -221,12 +228,31 @@ private struct DesktopWallpaperView: View {
         
         for basePath in wallpaperPaths {
             if let contents = try? FileManager.default.contentsOfDirectory(atPath: basePath),
-               let firstImage = contents.first(where: { $0.hasSuffix(".heic") || $0.hasSuffix(".jpg") }),
+               let firstImage = contents.first(where: { $0.hasSuffix(".heic") || $0.hasSuffix(".jpg") || $0.hasSuffix(".png") }),
                let image = NSImage(contentsOfFile: "\(basePath)/\(firstImage)") {
                 self.wallpaperImage = image
                 return
             }
         }
+    }
+    
+    private func getWallpaperPathViaAppleScript() -> String? {
+        let script = """
+        tell application "System Events"
+            tell current desktop
+                return picture as text
+            end tell
+        end tell
+        """
+        
+        var error: NSDictionary?
+        if let appleScript = NSAppleScript(source: script) {
+            let result = appleScript.executeAndReturnError(&error)
+            if error == nil, let path = result.stringValue {
+                return path
+            }
+        }
+        return nil
     }
 }
 
