@@ -115,28 +115,38 @@ struct SurgeSidebarItem: View {
     let isSelected: Bool
     let action: () -> Void
     
+    @State private var isHovering = false
+    
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.system(size: 15))
-                    .foregroundColor(isSelected ? .primary : .secondary)
-                    .frame(width: 22)
-                
-                Text(title)
-                    .font(.system(size: 14, weight: isSelected ? .medium : .regular))
-                    .foregroundColor(isSelected ? .primary : .secondary)
-                
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(isSelected ? Color(nsColor: NSColor(white: 0.88, alpha: 1.0)) : Color.clear)
-            )
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 15))
+                .foregroundColor(isSelected ? .primary : .secondary)
+                .frame(width: 22)
+            
+            Text(title)
+                .font(.system(size: 14, weight: isSelected ? .medium : .regular))
+                .foregroundColor(isSelected ? .primary : .secondary)
+            
+            Spacer()
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isSelected 
+                    ? Color(nsColor: NSColor(white: 0.86, alpha: 1.0))
+                    : (isHovering ? Color(nsColor: NSColor(white: 0.90, alpha: 1.0)) : Color.clear)
+                )
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            action()
+        }
+        .onHover { hovering in
+            isHovering = hovering
+        }
     }
 }
 
@@ -241,6 +251,20 @@ struct BreakRulesSectionContent: View {
                         .foregroundColor(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(12)
+                }
+            }
+            
+            // 渐进模式设置（仅渐进模式显示）
+            if settingsManager.settings.reminderMode == .progressive {
+                SettingsCard(title: "渐进模式设置", footer: "连续跳过达到阈值后，下次休息将变为强制模式") {
+                    Stepper(value: $settingsManager.settings.progressiveForceThreshold, in: 1...10) {
+                        SettingsRow(
+                            title: "强制休息阈值",
+                            value: "\(settingsManager.settings.progressiveForceThreshold) 次"
+                        )
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
                 }
             }
             
@@ -628,6 +652,79 @@ struct GeneralSectionContent: View {
                     .toggleStyle(.switch)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
+                }
+            }
+            
+            // 声音设置卡片
+            SettingsCard(title: "声音提醒") {
+                VStack(spacing: 0) {
+                    Toggle(isOn: $settingsManager.settings.enableSound) {
+                        SettingsRow(title: "启用声音提醒")
+                    }
+                    .toggleStyle(.switch)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    
+                    if settingsManager.settings.enableSound {
+                        Divider().padding(.leading, 12)
+                        
+                        Picker("休息开始", selection: $settingsManager.settings.breakStartSound) {
+                            ForEach(SoundManager.availableSounds, id: \.id) { sound in
+                                Text(sound.name).tag(sound.id)
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        
+                        Divider().padding(.leading, 12)
+                        
+                        Picker("休息结束", selection: $settingsManager.settings.breakEndSound) {
+                            ForEach(SoundManager.availableSounds, id: \.id) { sound in
+                                Text(sound.name).tag(sound.id)
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                    }
+                }
+            }
+            
+            // 勿扰时段卡片
+            SettingsCard(title: "勿扰时段", footer: "在指定时间段内不会触发休息提醒") {
+                VStack(spacing: 0) {
+                    Toggle(isOn: $settingsManager.settings.enableDoNotDisturb) {
+                        SettingsRow(title: "启用勿扰时段")
+                    }
+                    .toggleStyle(.switch)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    
+                    if settingsManager.settings.enableDoNotDisturb {
+                        Divider().padding(.leading, 12)
+                        
+                        HStack {
+                            Text("时间段")
+                            Spacer()
+                            Picker("", selection: $settingsManager.settings.doNotDisturbStart) {
+                                ForEach(0..<24, id: \.self) { hour in
+                                    Text(String(format: "%02d:00", hour)).tag(hour)
+                                }
+                            }
+                            .frame(width: 80)
+                            
+                            Text("至")
+                                .foregroundColor(.secondary)
+                            
+                            Picker("", selection: $settingsManager.settings.doNotDisturbEnd) {
+                                ForEach(0..<24, id: \.self) { hour in
+                                    Text(String(format: "%02d:00", hour)).tag(hour)
+                                }
+                            }
+                            .frame(width: 80)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                    }
                 }
             }
             
