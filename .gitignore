@@ -25,3 +25,8 @@ Carthage/
 # Misc
 *.swp
 *~
+
+# Build outputs
+dist/
+*.dmg
+*.profraw
