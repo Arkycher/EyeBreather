@@ -29,13 +29,14 @@ enum DesignConstants {
         static let title: CGFloat = 16
     }
     
-    // MARK: - Sidebar
+    // MARK: - Sidebar (使用系统颜色适配暗黑模式)
     enum Sidebar {
         static let width: CGFloat = 160
         static let itemSpacing: CGFloat = 2
-        static let backgroundColor = Color(nsColor: NSColor(white: 0.94, alpha: 1.0))
-        static let selectedColor = Color(nsColor: NSColor(white: 0.86, alpha: 1.0))
-        static let hoverColor = Color(nsColor: NSColor(white: 0.90, alpha: 1.0))
+        // 使用系统颜色，自动适配暗黑模式
+        static let backgroundColor = Color(nsColor: NSColor.windowBackgroundColor)
+        static let selectedColor = Color(nsColor: NSColor.selectedContentBackgroundColor).opacity(0.3)
+        static let hoverColor = Color(nsColor: NSColor.unemphasizedSelectedContentBackgroundColor).opacity(0.5)
     }
     
     // MARK: - Card

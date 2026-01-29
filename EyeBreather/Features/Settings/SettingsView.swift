@@ -2,6 +2,11 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+// MARK: - Card Color Constants
+// 卡片内文字颜色 - 使用系统颜色自动适配暗黑模式
+private let cardTextColor = Color(nsColor: NSColor.labelColor)
+private let cardSecondaryColor = Color(nsColor: NSColor.secondaryLabelColor)
+
 // MARK: - Settings Section Enum
 
 enum SettingsSection: String, CaseIterable, Identifiable {
@@ -36,10 +41,11 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 /// 设置视图（侧边栏式设计）
 struct SettingsView: View {
     @State private var selectedSection: SettingsSection = .breakRules
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         HStack(spacing: 0) {
-            // 侧边栏 - Surge 风格：浅灰色背景
+            // 侧边栏 - Surge 风格
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(SettingsSection.allCases) { section in
                     SurgeSidebarItem(
@@ -56,9 +62,9 @@ struct SettingsView: View {
             .padding(.horizontal, 8)
             .frame(width: DesignConstants.Sidebar.width)
             .frame(maxHeight: .infinity)
-            .background(DesignConstants.Sidebar.backgroundColor)
+            .background(sidebarBackground)
             
-            // 内容区 - 渐变背景
+            // 内容区 - 渐变背景（适应系统外观）
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     // 标题区域
@@ -76,20 +82,48 @@ struct SettingsView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                // Surge 风格：粉紫渐变背景
-                LinearGradient(
-                    colors: [
-                        Color(red: 0.98, green: 0.96, blue: 0.98),
-                        Color(red: 0.96, green: 0.94, blue: 0.98),
-                        Color(red: 0.94, green: 0.92, blue: 0.96)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            .background(contentBackground)
         }
         .frame(width: DesignConstants.SettingsWindow.width, height: DesignConstants.SettingsWindow.height)
+    }
+    
+    /// 侧边栏背景 - 根据系统外观自动调整
+    private var sidebarBackground: Color {
+        if colorScheme == .dark {
+            // 暗黑模式：与内容区域协调的深色
+            Color(red: 0.10, green: 0.10, blue: 0.12)
+        } else {
+            // 浅色模式：使用系统窗口背景色
+            DesignConstants.Sidebar.backgroundColor
+        }
+    }
+    
+    /// 内容区背景 - 根据系统外观自动调整
+    @ViewBuilder
+    private var contentBackground: some View {
+        if colorScheme == .dark {
+            // 暗黑模式：深色渐变
+            LinearGradient(
+                colors: [
+                    Color(red: 0.12, green: 0.12, blue: 0.14),
+                    Color(red: 0.10, green: 0.10, blue: 0.12),
+                    Color(red: 0.08, green: 0.08, blue: 0.10)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        } else {
+            // 浅色模式：粉紫渐变
+            LinearGradient(
+                colors: [
+                    Color(red: 0.98, green: 0.96, blue: 0.98),
+                    Color(red: 0.96, green: 0.94, blue: 0.98),
+                    Color(red: 0.94, green: 0.92, blue: 0.96)
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
     }
     
     @ViewBuilder
@@ -156,6 +190,7 @@ struct SettingsCard<Content: View>: View {
     let title: String
     let footer: String?
     @ViewBuilder let content: () -> Content
+    @Environment(\.colorScheme) private var colorScheme
     
     init(title: String, footer: String? = nil, @ViewBuilder content: @escaping () -> Content) {
         self.title = title
@@ -165,20 +200,25 @@ struct SettingsCard<Content: View>: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // 分组标题：深灰色，更有层次感
+            // 分组标题
             Text(title)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(Color(nsColor: NSColor(white: 0.4, alpha: 1.0)))
+                .foregroundColor(Color(nsColor: NSColor.secondaryLabelColor))
             
-            // 白色圆角卡片
+            // 圆角卡片 - 适应系统外观
             VStack(spacing: 0) {
                 content()
             }
-            .background(Color.white)
+            .background(cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: DesignConstants.CornerRadius.lg))
+            .overlay(
+                // 暗黑模式下添加边框增加对比度
+                RoundedRectangle(cornerRadius: DesignConstants.CornerRadius.lg)
+                    .stroke(cardBorderColor, lineWidth: colorScheme == .dark ? 1 : 0)
+            )
             .shadow(
-                color: Color.black.opacity(DesignConstants.Card.shadowOpacity),
-                radius: DesignConstants.Card.shadowRadius,
+                color: Color.black.opacity(colorScheme == .dark ? 0.3 : DesignConstants.Card.shadowOpacity),
+                radius: colorScheme == .dark ? 4 : DesignConstants.Card.shadowRadius,
                 x: 0,
                 y: DesignConstants.Card.shadowY
             )
@@ -186,10 +226,25 @@ struct SettingsCard<Content: View>: View {
             if let footer = footer {
                 Text(footer)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(nsColor: NSColor.secondaryLabelColor))
                     .padding(.top, 2)
             }
         }
+    }
+    
+    /// 卡片背景色
+    private var cardBackground: Color {
+        if colorScheme == .dark {
+            // 暗黑模式：使用略微提亮的背景色增加层次感
+            return Color(nsColor: NSColor(white: 0.18, alpha: 1.0))
+        } else {
+            return Color.white
+        }
+    }
+    
+    /// 卡片边框色
+    private var cardBorderColor: Color {
+        Color(nsColor: NSColor(white: 0.3, alpha: 1.0))
     }
 }
 
@@ -200,11 +255,11 @@ struct SettingsRow: View {
     var body: some View {
         HStack {
             Text(title)
-                .foregroundColor(.primary)
+                .foregroundColor(cardTextColor)
             Spacer()
             if let value = value {
                 Text(value)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(cardSecondaryColor)
             }
         }
         .padding(.horizontal, 12)
@@ -253,7 +308,7 @@ struct BreakRulesSectionContent: View {
                     
                     Text(settingsManager.settings.reminderMode.description)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(cardSecondaryColor)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(12)
                 }
@@ -322,6 +377,7 @@ struct SmartPauseSectionContent: View {
                                 .frame(width: 20)
                             
                             Text(app.name)
+                                .foregroundColor(cardTextColor)
                                 .lineLimit(1)
                             
                             Spacer()
@@ -329,10 +385,10 @@ struct SmartPauseSectionContent: View {
                             if app.isPreset {
                                 Text("预设")
                                     .font(.caption2)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(cardSecondaryColor)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
-                                    .background(Color.secondary.opacity(0.15))
+                                    .background(cardSecondaryColor.opacity(0.15))
                                     .clipShape(RoundedRectangle(cornerRadius: 4))
                             }
                             
@@ -507,6 +563,7 @@ struct AppPickerView: View {
 
 struct AppearanceSectionContent: View {
     @ObservedObject private var settingsManager = SettingsManager.shared
+    @ObservedObject private var wallpaperManager = WallpaperManager.shared
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -533,16 +590,17 @@ struct AppearanceSectionContent: View {
                             // 图标
                             Image(systemName: style.icon)
                                 .font(.system(size: 16))
-                                .foregroundColor(settingsManager.settings.breakStyle == style ? .accentColor : .secondary)
+                                .foregroundColor(settingsManager.settings.breakStyle == style ? .accentColor : cardSecondaryColor)
                                 .frame(width: 24)
                             
                             // 标题和描述
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(style.displayName)
                                     .font(.system(size: 14))
+                                    .foregroundColor(cardTextColor)
                                 Text(style.description)
                                     .font(.system(size: 11))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(cardSecondaryColor)
                                     .lineLimit(1)
                             }
                             
@@ -559,33 +617,133 @@ struct AppearanceSectionContent: View {
                         .contentShape(Rectangle())
                         .onTapGesture {
                             settingsManager.settings.breakStyle = style
+                            // 选择桌面壁纸时触发加载
+                            if style == .desktop {
+                                wallpaperManager.loadWallpaper()
+                            }
                         }
                     }
+                }
+            }
+            
+            // 桌面壁纸预览（仅当选择桌面壁纸时显示）
+            if settingsManager.settings.breakStyle == .desktop {
+                SettingsCard(title: "壁纸预览") {
+                    VStack(spacing: 12) {
+                        // 壁纸预览图
+                        ZStack {
+                            if wallpaperManager.isLoading {
+                                ProgressView()
+                                    .frame(height: 120)
+                            } else if let image = wallpaperManager.wallpaperImage {
+                                Image(nsImage: image)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                                    .frame(height: 120)
+                                    .clipped()
+                                    .blur(radius: 8)
+                                    .overlay(Color.black.opacity(0.2))
+                                    .overlay(
+                                        VStack {
+                                            Text("休息时间")
+                                                .font(.system(size: 14, weight: .bold))
+                                                .foregroundColor(.white)
+                                            Text("20")
+                                                .font(.system(size: 32, weight: .thin, design: .rounded))
+                                                .foregroundColor(.white)
+                                        }
+                                    )
+                            } else {
+                                // 无法获取壁纸
+                                VStack(spacing: 8) {
+                                    Image(systemName: "photo.badge.exclamationmark")
+                                        .font(.system(size: 32))
+                                        .foregroundColor(cardSecondaryColor)
+                                    Text("无法获取桌面壁纸")
+                                        .font(.caption)
+                                        .foregroundColor(cardSecondaryColor)
+                                    if let error = wallpaperManager.errorMessage {
+                                        Text(error)
+                                            .font(.caption2)
+                                            .foregroundColor(.red)
+                                    }
+                                }
+                                .frame(height: 120)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        
+                        // 操作按钮
+                        HStack {
+                            Button {
+                                wallpaperManager.refresh()
+                            } label: {
+                                Label("刷新", systemImage: "arrow.clockwise")
+                            }
+                            .buttonStyle(.bordered)
+                            
+                            if !wallpaperManager.hasPermission && wallpaperManager.wallpaperImage == nil {
+                                Button {
+                                    wallpaperManager.requestPermission()
+                                } label: {
+                                    Label("授权访问", systemImage: "lock.open")
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                        }
+                    }
+                    .padding(12)
                 }
             }
             
             // 自定义背景图片（仅当选择自定义背景时显示）
             if settingsManager.settings.breakStyle == .custom {
                 SettingsCard(title: "自定义背景") {
-                    HStack {
-                        Image(systemName: "photo")
-                            .foregroundColor(.secondary)
-                        
-                        if let path = settingsManager.settings.customBackgroundPath {
-                            Text(URL(fileURLWithPath: path).lastPathComponent)
-                                .foregroundColor(.primary)
-                                .lineLimit(1)
-                        } else {
-                            Text("未选择图片")
-                                .foregroundColor(.secondary)
+                    VStack(spacing: 12) {
+                        // 背景预览
+                        if let path = settingsManager.settings.customBackgroundPath,
+                           let nsImage = NSImage(contentsOfFile: path) {
+                            Image(nsImage: nsImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(height: 120)
+                                .clipped()
+                                .blur(radius: 8)
+                                .overlay(Color.black.opacity(0.2))
+                                .overlay(
+                                    VStack {
+                                        Text("休息时间")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundColor(.white)
+                                        Text("20")
+                                            .font(.system(size: 32, weight: .thin, design: .rounded))
+                                            .foregroundColor(.white)
+                                    }
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
                         }
                         
-                        Spacer()
-                        
-                        Button("选择...") {
-                            selectCustomBackground()
+                        HStack {
+                            Image(systemName: "photo")
+                                .foregroundColor(cardSecondaryColor)
+                            
+                            if let path = settingsManager.settings.customBackgroundPath {
+                                Text(URL(fileURLWithPath: path).lastPathComponent)
+                                    .foregroundColor(cardTextColor)
+                                    .lineLimit(1)
+                            } else {
+                                Text("未选择图片")
+                                    .foregroundColor(cardSecondaryColor)
+                            }
+                            
+                            Spacer()
+                            
+                            Button("选择...") {
+                                selectCustomBackground()
+                            }
+                            .buttonStyle(.bordered)
                         }
-                        .buttonStyle(.bordered)
                     }
                     .padding(12)
                 }
@@ -596,11 +754,18 @@ struct AppearanceSectionContent: View {
                 SettingsCard(title: "自定义提示内容", footer: "休息时显示的文字，支持换行") {
                     TextEditor(text: $settingsManager.settings.customTipsText)
                         .font(.system(size: 13))
+                        .foregroundColor(cardTextColor)
                         .frame(height: 80)
                         .padding(8)
                         .scrollContentBackground(.hidden)
                         .background(Color.clear)
                 }
+            }
+        }
+        .onAppear {
+            // 如果当前选择的是桌面壁纸，加载壁纸
+            if settingsManager.settings.breakStyle == .desktop {
+                wallpaperManager.loadWallpaper()
             }
         }
     }
@@ -718,7 +883,7 @@ struct GeneralSectionContent: View {
                             .frame(width: 80)
                             
                             Text("至")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(cardSecondaryColor)
                             
                             Picker("", selection: $settingsManager.settings.doNotDisturbEnd) {
                                 ForEach(0..<24, id: \.self) { hour in

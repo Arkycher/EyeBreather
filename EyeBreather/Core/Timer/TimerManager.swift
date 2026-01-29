@@ -167,11 +167,14 @@ final class TimerManager: ObservableObject {
     
     private func startTimer() {
         stopTimer()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        // 使用 Timer + RunLoop.common 模式，确保即使有模态对话框（如权限弹窗）也能继续计时
+        timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.tick()
             }
         }
+        // 添加到 .common 模式，包含 .default 和 .modalPanel 等多种模式
+        RunLoop.main.add(timer!, forMode: .common)
     }
     
     private func stopTimer() {

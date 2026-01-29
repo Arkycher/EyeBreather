@@ -7,12 +7,18 @@ final class BreakFlowE2ETests: XCTestCase {
     
     override func setUp() {
         super.setUp()
+        // 确保状态完全重置
+        BreakWindowController.shared.hideOverlay()
+        TimerManager.shared.resetWorkCycle()
+        TimerManager.shared.pause()
         SettingsManager.shared.resetToDefaults()
         UserDefaults.standard.removeObject(forKey: "com.eyebreather.statistics")
         UserDefaults.standard.removeObject(forKey: "consecutiveSkips")
     }
     
     override func tearDown() {
+        // 确保完全重置状态
+        TimerManager.shared.resetWorkCycle()
         TimerManager.shared.pause()
         BreakWindowController.shared.hideOverlay()
         SettingsManager.shared.resetToDefaults()

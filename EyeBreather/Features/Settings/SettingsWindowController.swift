@@ -8,6 +8,7 @@ final class SettingsWindowController {
     static let shared = SettingsWindowController()
     
     private var window: NSWindow?
+    private var appearanceObserver: NSObjectProtocol?
     
     private init() {}
     
@@ -30,14 +31,29 @@ final class SettingsWindowController {
         
         window.title = "EyeBreather"
         window.titlebarAppearsTransparent = true
-        window.backgroundColor = NSColor(white: 0.94, alpha: 1.0)  // 匹配侧边栏
+        // 使用系统窗口背景色，自动适配暗黑模式
+        window.backgroundColor = NSColor.windowBackgroundColor
         window.contentView = NSHostingView(rootView: settingsView)
         window.center()
         window.isReleasedWhenClosed = false
         
+        // 监听系统外观变化，更新窗口背景色
+        appearanceObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.updateWindowAppearance()
+        }
+        
         self.window = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+    
+    /// 更新窗口外观以匹配系统设置
+    private func updateWindowAppearance() {
+        window?.backgroundColor = NSColor.windowBackgroundColor
     }
     
     func closeSettings() {

@@ -30,3 +30,6 @@ Carthage/
 dist/
 *.dmg
 *.profraw
+
+# Marketing materials (not for git)
+marketing/

@@ -5,6 +5,10 @@ import AppKit
 struct BreakOverlayView: View {
     @ObservedObject private var timerManager = TimerManager.shared
     @ObservedObject private var settingsManager = SettingsManager.shared
+    @ObservedObject private var wallpaperManager = WallpaperManager.shared
+    
+    /// 自定义背景的亮度（缓存计算结果）
+    @State private var customBackgroundBrightness: CGFloat = 0.3
     
     var body: some View {
         GeometryReader { geometry in
@@ -19,39 +23,40 @@ struct BreakOverlayView: View {
                     // 标题
                     Text("休息时间")
                         .font(.system(size: 48, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(textColor)
+                        .shadow(color: textShadowColor, radius: textShadowRadius, x: 0, y: 1)
                     
                     // 倒计时
                     Text(formattedRemainingTime)
                         .font(.system(size: 120, weight: .thin, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundStyle(textColor)
                         .monospacedDigit()
+                        .shadow(color: textShadowColor, radius: textShadowRadius, x: 0, y: 2)
                     
                     // 提示文字
                     Text(tipsText)
                         .font(.title2)
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundStyle(textColor.opacity(0.8))
                         .multilineTextAlignment(.center)
+                        .shadow(color: textShadowColor, radius: textShadowRadius, x: 0, y: 1)
                     
                     // 进度条
                     ProgressView(value: timerManager.breakProgress)
                         .progressViewStyle(.linear)
                         .frame(width: 300)
-                        .tint(.white)
+                        .tint(textColor)
                     
                     // 操作按钮（温和模式和渐进模式非强制状态显示）
                     if canSkipBreak {
-                        HStack(spacing: 20) {
-                            Button("跳过") {
+                        HStack(spacing: 16) {
+                            BreakActionButton(title: "跳过", style: buttonStyle) {
                                 skipBreak()
                             }
-                            .buttonStyle(.bordered)
                             
                             ForEach(settingsManager.settings.delayOptions, id: \.self) { minutes in
-                                Button("延迟 \(minutes) 分钟") {
+                                BreakActionButton(title: "延迟 \(minutes) 分钟", style: buttonStyle) {
                                     delayBreak(minutes: minutes)
                                 }
-                                .buttonStyle(.bordered)
                             }
                         }
                         .padding(.top, 20)
@@ -111,14 +116,28 @@ struct BreakOverlayView: View {
         case .tips:
             Color.black.opacity(0.85)
         case .desktop:
-            // 使用系统桌面壁纸
-            // 扩展尺寸以补偿 blur 效果导致的边缘收缩
+            // 使用系统桌面壁纸 - 从 WallpaperManager 获取
             GeometryReader { geo in
-                DesktopWallpaperView()
-                    .frame(width: geo.size.width + 120, height: geo.size.height + 120)
-                    .offset(x: -60, y: -60)
-                    .blur(radius: 30)
-                    .overlay(Color.black.opacity(0.3))
+                if let image = WallpaperManager.shared.wallpaperImage {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geo.size.width + 120, height: geo.size.height + 120)
+                        .offset(x: -60, y: -60)
+                        .blur(radius: 30)
+                        .overlay(Color.black.opacity(0.3))
+                } else {
+                    // 回退：深色渐变背景
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.1, green: 0.1, blue: 0.2),
+                            Color(red: 0.05, green: 0.05, blue: 0.1)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                    .frame(width: geo.size.width, height: geo.size.height)
+                }
             }
             .clipped()
         case .custom:
@@ -128,6 +147,10 @@ struct BreakOverlayView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .overlay(Color.black.opacity(0.3))
+                    .onAppear {
+                        // 分析自定义背景的亮度
+                        customBackgroundBrightness = WallpaperManager.calculateBrightness(of: nsImage)
+                    }
             } else {
                 Color.black.opacity(0.9)
             }
@@ -170,6 +193,68 @@ struct BreakOverlayView: View {
         return String(format: "%d", seconds)
     }
     
+    // MARK: - 智能颜色计算
+    
+    /// 当前背景是否偏亮
+    private var isBackgroundBright: Bool {
+        switch settingsManager.settings.breakStyle {
+        case .blur, .liquidGlass:
+            // 毛玻璃效果，取决于系统外观
+            return false // 通常偏暗
+        case .dark, .tips:
+            // 深色背景
+            return false
+        case .desktop:
+            // 使用壁纸管理器分析的亮度，考虑到有 0.3 的黑色遮罩
+            // 遮罩后的亮度 = 原亮度 * 0.7
+            return (wallpaperManager.wallpaperBrightness * 0.7) > 0.5
+        case .custom:
+            // 自定义背景，考虑到有 0.3 的黑色遮罩
+            return (customBackgroundBrightness * 0.7) > 0.5
+        }
+    }
+    
+    /// 根据背景亮度确定文字颜色
+    private var textColor: Color {
+        isBackgroundBright ? .black : .white
+    }
+    
+    /// 文字阴影颜色（与文字颜色相反，用于增加对比度）
+    private var textShadowColor: Color {
+        if isBackgroundBright {
+            return Color.white.opacity(0.6)
+        } else {
+            return Color.black.opacity(0.4)
+        }
+    }
+    
+    /// 文字阴影半径
+    private var textShadowRadius: CGFloat {
+        switch settingsManager.settings.breakStyle {
+        case .blur, .liquidGlass:
+            return 3
+        case .dark, .tips:
+            return 1
+        case .desktop, .custom:
+            return 4
+        }
+    }
+    
+    /// 按钮样式
+    private var buttonStyle: BreakButtonStyle {
+        if isBackgroundBright {
+            return .light
+        }
+        switch settingsManager.settings.breakStyle {
+        case .blur, .liquidGlass:
+            return .glass
+        case .dark, .tips:
+            return .dark
+        case .desktop, .custom:
+            return .overlay
+        }
+    }
+    
     // MARK: - Actions
     
     private func skipBreak() {
@@ -183,78 +268,103 @@ struct BreakOverlayView: View {
     }
 }
 
-// MARK: - Desktop Wallpaper View
+// MARK: - Button Style Enum
 
-/// 获取并显示当前桌面壁纸
-private struct DesktopWallpaperView: View {
-    @State private var wallpaperImage: NSImage?
+/// 休息界面按钮样式
+enum BreakButtonStyle {
+    case glass    // 毛玻璃效果（用于模糊背景）
+    case dark     // 深色背景上的按钮
+    case overlay  // 图片背景上的按钮（深色遮罩）
+    case light    // 亮色背景上的按钮（深色文字）
+}
+
+// MARK: - Custom Break Action Button
+
+/// 自适应背景的休息操作按钮
+struct BreakActionButton: View {
+    let title: String
+    let style: BreakButtonStyle
+    let action: () -> Void
+    
+    @State private var isHovering = false
     
     var body: some View {
-        GeometryReader { geometry in
-            Group {
-                if let image = wallpaperImage {
-                    Image(nsImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: geometry.size.width, height: geometry.size.height)
-                        .clipped()
-                } else {
-                    // 回退：深色渐变背景
-                    LinearGradient(
-                        colors: [
-                            Color(red: 0.1, green: 0.1, blue: 0.2),
-                            Color(red: 0.05, green: 0.05, blue: 0.1)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                }
-            }
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(buttonTextColor)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(buttonBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .shadow(color: buttonShadowColor, radius: isHovering ? 8 : 4, x: 0, y: 2)
         }
-        .onAppear {
-            loadWallpaper()
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovering = hovering
+            }
         }
     }
     
-    private func loadWallpaper() {
-        // 方法1: 通过 NSWorkspace 获取壁纸数据
-        if let screen = NSScreen.main,
-           let wallpaperURL = NSWorkspace.shared.desktopImageURL(for: screen) {
-            // 尝试直接加载
-            if let image = NSImage(contentsOf: wallpaperURL) {
-                self.wallpaperImage = image
-                return
-            }
-            
-            // 尝试通过 Data 加载（某些情况下更可靠）
-            if let data = try? Data(contentsOf: wallpaperURL),
-               let image = NSImage(data: data) {
-                self.wallpaperImage = image
-                return
-            }
+    @ViewBuilder
+    private var buttonBackground: some View {
+        switch style {
+        case .glass:
+            // 毛玻璃效果按钮
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                )
+                .opacity(isHovering ? 1.0 : 0.8)
+        case .dark:
+            // 深色背景按钮（白色半透明）
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(isHovering ? 0.25 : 0.15))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                )
+        case .overlay:
+            // 图片深色背景上的按钮（白色半透明）
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(isHovering ? 0.3 : 0.2))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(0.4), lineWidth: 1)
+                )
+        case .light:
+            // 亮色背景上的按钮（深色半透明）
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.black.opacity(isHovering ? 0.25 : 0.15))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.black.opacity(0.2), lineWidth: 1)
+                )
         }
-        
-        // 方法2: 回退到系统默认壁纸目录（按当前外观选择合适的壁纸）
-        let systemWallpaperPath = "/System/Library/Desktop Pictures"
-        if let contents = try? FileManager.default.contentsOfDirectory(atPath: systemWallpaperPath) {
-            // 按优先级查找：Sonoma 动态壁纸 > Ventura > 其他
-            let preferredNames = ["Sonoma", "Ventura", "Sequoia", "Monterey", "Big Sur"]
-            
-            for name in preferredNames {
-                if let match = contents.first(where: { $0.contains(name) && ($0.hasSuffix(".heic") || $0.hasSuffix(".jpg")) }),
-                   let image = NSImage(contentsOfFile: "\(systemWallpaperPath)/\(match)") {
-                    self.wallpaperImage = image
-                    return
-                }
-            }
-            
-            // 如果没有找到首选壁纸，使用第一个可用的
-            if let firstImage = contents.first(where: { $0.hasSuffix(".heic") || $0.hasSuffix(".jpg") }),
-               let image = NSImage(contentsOfFile: "\(systemWallpaperPath)/\(firstImage)") {
-                self.wallpaperImage = image
-                return
-            }
+    }
+    
+    private var buttonTextColor: Color {
+        switch style {
+        case .glass, .dark, .overlay:
+            return .white
+        case .light:
+            return .black
+        }
+    }
+    
+    private var buttonShadowColor: Color {
+        switch style {
+        case .glass:
+            return Color.black.opacity(0.15)
+        case .dark:
+            return Color.black.opacity(0.2)
+        case .overlay:
+            return Color.black.opacity(0.3)
+        case .light:
+            return Color.white.opacity(0.3)
         }
     }
 }
