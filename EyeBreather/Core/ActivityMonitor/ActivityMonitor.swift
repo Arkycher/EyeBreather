@@ -25,6 +25,13 @@ final class ActivityMonitor: ObservableObject {
     private var eventMonitor: Any?
     private var idleCheckTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
+    private var pendingActivityUpdate = false
+    
+    /// 鼠标移动事件节流：上次处理时间
+    private var lastMouseMoveTime: Date = .distantPast
+    /// 鼠标移动事件节流间隔（秒）
+    /// 5 秒粒度足够判断“是否活跃”，可显著减少全局事件处理开销
+    private let mouseMoveThrottleInterval: TimeInterval = 5.0
     
     // MARK: - Initialization
     
@@ -67,12 +74,23 @@ final class ActivityMonitor: ObservableObject {
         isIdle = false
         
         // 监听全局鼠标和键盘事件
+        // 性能优化：鼠标移动事件节流，其他事件直接处理
         eventMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.mouseMoved, .leftMouseDown, .rightMouseDown, .keyDown, .scrollWheel]
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.recordActivity()
+        ) { [weak self] event in
+            guard let self = self else { return }
+            
+            // 鼠标移动事件节流：每 0.5 秒最多处理一次
+            if event.type == .mouseMoved {
+                let now = Date()
+                // 同步检查节流（避免创建过多 Task）
+                if now.timeIntervalSince(self.lastMouseMoveTime) < self.mouseMoveThrottleInterval {
+                    return
+                }
+                self.lastMouseMoveTime = now
             }
+            
+            self.scheduleActivityUpdate()
         }
         
         // 启动空闲检查定时器
@@ -110,14 +128,29 @@ final class ActivityMonitor: ObservableObject {
     }
     
     // MARK: - Private Methods
+
+    private func scheduleActivityUpdate() {
+        guard !pendingActivityUpdate else { return }
+        pendingActivityUpdate = true
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.pendingActivityUpdate = false
+            self.recordActivity()
+        }
+    }
     
     private func startIdleCheckTimer() {
         idleCheckTimer?.invalidate()
-        idleCheckTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+        // 性能优化：延长检查间隔到 30 秒，并设置 tolerance 允许系统合并唤醒
+        let timer = Timer(timeInterval: 30.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.checkIdleStatus()
             }
         }
+        timer.tolerance = 5.0  // 允许 5 秒误差，让系统合并定时器唤醒
+        RunLoop.main.add(timer, forMode: .common)
+        idleCheckTimer = timer
     }
     
     private func checkIdleStatus() {

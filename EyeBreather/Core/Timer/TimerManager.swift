@@ -25,6 +25,9 @@ final class TimerManager: ObservableObject {
     
     private var timer: Timer?
     private var cancellables = Set<AnyCancellable>()
+    private var stateBeforePause: TimerState?
+    private var lastTickDate: Date?
+    private var tickRemainder: TimeInterval = 0
     
     // MARK: - Computed Properties
     
@@ -98,8 +101,9 @@ final class TimerManager: ObservableObject {
     
     /// 暂停计时
     func pause() {
-        guard state == .working || state == .preBreak else { return }
+        guard state == .working || state == .preBreak || state == .breaking else { return }
         
+        stateBeforePause = state
         state = .paused
         stopTimer()
     }
@@ -108,13 +112,15 @@ final class TimerManager: ObservableObject {
     func resume() {
         guard state == .paused else { return }
         
-        state = .working
+        state = stateBeforePause ?? .working
+        stateBeforePause = nil
         lastActivityTime = Date()
         startTimer()
     }
     
     /// 开始休息
     func startBreak() {
+        stateBeforePause = nil
         state = .breaking
         elapsedBreakTime = 0
         stopTimer()
@@ -129,6 +135,7 @@ final class TimerManager: ObservableObject {
     /// 延迟休息
     func delayBreak(minutes: Int) {
         // 减少已工作时间，相当于延迟
+        stateBeforePause = nil
         elapsedWorkTime = max(0, workDurationSeconds - minutes * 60)
         state = .working
     }
@@ -141,6 +148,7 @@ final class TimerManager: ObservableObject {
     /// 重置工作周期
     func resetWorkCycle() {
         stopTimer()
+        stateBeforePause = nil
         state = .working
         elapsedWorkTime = 0
         elapsedBreakTime = 0
@@ -167,25 +175,54 @@ final class TimerManager: ObservableObject {
     
     private func startTimer() {
         stopTimer()
-        // 使用 Timer + RunLoop.common 模式，确保即使有模态对话框（如权限弹窗）也能继续计时
-        timer = Timer(timeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.tick()
-            }
+        // 工作态用 5 秒粒度，休息态保留 1 秒倒计时体验
+        let interval = state == .breaking ? 1.0 : 5.0
+        let leewayMs: Int = state == .breaking ? 100 : 500
+
+        // 使用 DispatchSourceTimer，减少主线程唤醒和调度成本
+        let source = DispatchSource.makeTimerSource(queue: .main)
+        source.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(leewayMs))
+        source.setEventHandler { [weak self] in
+            self?.tick()
         }
-        // 添加到 .common 模式，包含 .default 和 .modalPanel 等多种模式
-        RunLoop.main.add(timer!, forMode: .common)
+        source.resume()
+        dispatchTimer = source
+        lastTickDate = Date()
+        tickRemainder = 0
     }
+    
+    /// DispatchSource 定时器
+    private var dispatchTimer: DispatchSourceTimer?
     
     private func stopTimer() {
         timer?.invalidate()
         timer = nil
+        dispatchTimer?.cancel()
+        dispatchTimer = nil
+        lastTickDate = nil
+        tickRemainder = 0
     }
     
     private func tick() {
+        let now = Date()
+        let elapsedSinceLastTick: Int
+        if let lastTickDate {
+            // 累积小数秒，避免 5 秒粒度下重复向下取整导致计时变慢
+            let elapsed = max(0, now.timeIntervalSince(lastTickDate))
+            let accumulated = tickRemainder + elapsed
+            elapsedSinceLastTick = Int(accumulated)
+            tickRemainder = accumulated - TimeInterval(elapsedSinceLastTick)
+        } else {
+            elapsedSinceLastTick = 0
+            tickRemainder = 0
+        }
+        lastTickDate = now
+
+        guard elapsedSinceLastTick > 0 else { return }
+
         switch state {
         case .working, .preBreak:
-            elapsedWorkTime += 1
+            elapsedWorkTime += elapsedSinceLastTick
             
             // 检查是否进入预警
             if isInPreBreakWarning && state == .working {
@@ -199,7 +236,7 @@ final class TimerManager: ObservableObject {
             }
             
         case .breaking:
-            elapsedBreakTime += 1
+            elapsedBreakTime += elapsedSinceLastTick
             
             // 检查休息是否完成
             if elapsedBreakTime >= breakDurationSeconds {
@@ -219,3 +256,11 @@ extension Notification.Name {
     static let breakTimeReached = Notification.Name("com.eyebreather.breakTimeReached")
     static let breakCompleted = Notification.Name("com.eyebreather.breakCompleted")
 }
+
+#if DEBUG
+extension TimerManager {
+    func debugSetState(_ newState: TimerState) {
+        state = newState
+    }
+}
+#endif

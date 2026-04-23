@@ -25,11 +25,13 @@ final class MediaDeviceMonitor: ObservableObject {
     // MARK: - Private Properties
     
     private var checkTimer: Timer?
+    private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
     
     private init() {
-        startMonitoring()
+        observeSettingsChanges()
+        applyMonitoringStateFromSettings()
     }
     
     deinit {
@@ -40,12 +42,17 @@ final class MediaDeviceMonitor: ObservableObject {
     
     /// 开始监控设备状态
     func startMonitoring() {
-        // 每 5 秒检查一次
-        checkTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+        guard checkTimer == nil else { return }
+
+        // 性能优化：延长检查间隔到 15 秒，并设置 tolerance
+        let timer = Timer(timeInterval: 15.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.checkDeviceStatus()
             }
         }
+        timer.tolerance = 3.0  // 允许 3 秒误差，让系统合并定时器唤醒
+        RunLoop.main.add(timer, forMode: .common)
+        checkTimer = timer
         // 立即检查一次
         checkDeviceStatus()
     }
@@ -54,20 +61,43 @@ final class MediaDeviceMonitor: ObservableObject {
     func stopMonitoring() {
         checkTimer?.invalidate()
         checkTimer = nil
+        isCameraInUse = false
+        isMicrophoneInUse = false
+    }
+
+    private func observeSettingsChanges() {
+        NotificationCenter.default.publisher(for: .settingsDidChange)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.applyMonitoringStateFromSettings()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func applyMonitoringStateFromSettings() {
+        if SettingsManager.shared.settings.enableMeetingDetection {
+            startMonitoring()
+        } else {
+            stopMonitoring()
+        }
     }
     
     // MARK: - Private Methods
     
     private func checkDeviceStatus() {
+        let previousMeetingStatus = isInMeeting
+        
         isCameraInUse = checkCameraInUse()
         isMicrophoneInUse = checkMicrophoneInUse()
         
-        // 发送状态变化通知
-        NotificationCenter.default.post(
-            name: .meetingStatusChanged,
-            object: nil,
-            userInfo: ["isInMeeting": isInMeeting]
-        )
+        // 性能优化：只在状态变化时发送通知
+        if isInMeeting != previousMeetingStatus {
+            NotificationCenter.default.post(
+                name: .meetingStatusChanged,
+                object: nil,
+                userInfo: ["isInMeeting": isInMeeting]
+            )
+        }
     }
     
     private func checkCameraInUse() -> Bool {

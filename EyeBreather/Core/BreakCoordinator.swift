@@ -135,7 +135,8 @@ final class BreakCoordinator {
     private func scheduleAutoBreak() {
         cancelAutoBreak()
         
-        autoBreakTimer = Timer.scheduledTimer(withTimeInterval: gentleModeWaitSeconds, repeats: false) { [weak self] _ in
+        // 性能优化：设置 tolerance 允许系统合并唤醒
+        let timer = Timer(timeInterval: gentleModeWaitSeconds, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self else { return }
                 // 如果还没有开始休息，自动开始
@@ -144,6 +145,9 @@ final class BreakCoordinator {
                 }
             }
         }
+        timer.tolerance = 2.0  // 允许 2 秒误差
+        RunLoop.main.add(timer, forMode: .common)
+        autoBreakTimer = timer
     }
     
     /// 取消自动休息定时器
@@ -178,6 +182,8 @@ final class BreakCoordinator {
     }
     
     private func handleShouldResume() {
+        guard !SystemStateMonitor.shared.isSuspended else { return }
+
         // 恢复计时
         if TimerManager.shared.state == .paused {
             TimerManager.shared.resume()
@@ -206,6 +212,12 @@ final class BreakCoordinator {
         breakTriggered = false
         TimerManager.shared.delayBreak(minutes: minutes)
         BreakWindowController.shared.hideOverlay()
+    }
+
+    /// 在系统挂起时取消等待中的自动休息，避免锁屏期间偷偷进入休息
+    func suspendPendingBreak() {
+        cancelAutoBreak()
+        breakTriggered = false
     }
     
     // MARK: - Statistics Recording

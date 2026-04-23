@@ -25,6 +25,13 @@ final class BreakStatisticsManager: ObservableObject {
     
     private static let storageKey = "com.eyebreather.statistics"
     
+    /// 性能优化：缓存 DateFormatter（创建成本高）
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+    
     @Published private(set) var todayStatistics: DailyBreakStatistics
     @Published private(set) var allStatistics: [DailyBreakStatistics]
     
@@ -41,9 +48,7 @@ final class BreakStatisticsManager: ObservableObject {
     // MARK: - Date Helper
     
     private static var todayKey: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: Date())
+        dateFormatter.string(from: Date())
     }
     
     // MARK: - Load
@@ -73,11 +78,9 @@ final class BreakStatisticsManager: ObservableObject {
             allStatistics.append(todayStatistics)
         }
         
-        // 只保留最近 30 天
+        // 只保留最近 30 天（使用缓存的 DateFormatter）
         let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let cutoffKey = formatter.string(from: thirtyDaysAgo)
+        let cutoffKey = Self.dateFormatter.string(from: thirtyDaysAgo)
         allStatistics = allStatistics.filter { $0.date >= cutoffKey }
         
         // 保存

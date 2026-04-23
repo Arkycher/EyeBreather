@@ -36,7 +36,13 @@ final class WallpaperManager: ObservableObject {
     private var cachedWallpaperURL: URL?
     
     private init() {
-        // 初始化时尝试加载壁纸
+        // 性能优化：懒加载壁纸，只在需要时才加载
+        // 不再在初始化时加载，由 BreakOverlayView 首次显示时触发
+    }
+    
+    /// 确保壁纸已加载（懒加载入口）
+    func ensureLoaded() {
+        guard wallpaperImage == nil && !isLoading else { return }
         loadWallpaper()
     }
     

@@ -67,6 +67,12 @@ struct BreakOverlayView: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .ignoresSafeArea()
+        .onAppear {
+            // 性能优化：懒加载壁纸（只在休息界面显示时加载）
+            if settingsManager.settings.breakStyle == .desktop {
+                WallpaperManager.shared.ensureLoaded()
+            }
+        }
     }
     
     // MARK: - Background View
@@ -258,13 +264,11 @@ struct BreakOverlayView: View {
     // MARK: - Actions
     
     private func skipBreak() {
-        timerManager.skipBreak()
-        BreakWindowController.shared.hideOverlay()
+        BreakCoordinator.shared.skipBreak()
     }
     
     private func delayBreak(minutes: Int) {
-        timerManager.delayBreak(minutes: minutes)
-        BreakWindowController.shared.hideOverlay()
+        BreakCoordinator.shared.delayBreak(minutes: minutes)
     }
 }
 

@@ -48,6 +48,19 @@ final class TimerManagerTests: XCTestCase {
         XCTAssertEqual(timerManager.state, .breaking)
         XCTAssertEqual(timerManager.elapsedBreakTime, 0)
     }
+
+    func testPauseFromBreaking() {
+        timerManager.startBreak()
+        timerManager.pause()
+        XCTAssertEqual(timerManager.state, .paused)
+    }
+
+    func testResumeReturnsToBreakingAfterPause() {
+        timerManager.startBreak()
+        timerManager.pause()
+        timerManager.resume()
+        XCTAssertEqual(timerManager.state, .breaking)
+    }
     
     func testWorkProgress() {
         XCTAssertGreaterThanOrEqual(timerManager.workProgress, 0)

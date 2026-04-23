@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import Combine
+import OSLog
 
 /// 系统状态监视器
 /// 监听系统睡眠/唤醒事件
@@ -8,11 +9,21 @@ import Combine
 final class SystemStateMonitor: ObservableObject {
     /// 共享实例
     static let shared = SystemStateMonitor()
+
+    private let logger = Logger(subsystem: "com.eyebreather.app", category: "SystemStateMonitor")
     
     // MARK: - Published Properties
     
     /// 系统是否处于睡眠状态
     @Published private(set) var isSystemSleeping: Bool = false
+
+    /// 屏幕是否处于锁定状态
+    @Published private(set) var isScreenLocked: Bool = false
+
+    /// 是否处于任何系统挂起态（锁屏或睡眠）
+    var isSuspended: Bool {
+        isSystemSleeping || isScreenLocked
+    }
     
     /// 上次睡眠时间
     @Published private(set) var lastSleepTime: Date?
@@ -24,6 +35,9 @@ final class SystemStateMonitor: ObservableObject {
     
     private var sleepObserver: Any?
     private var wakeObserver: Any?
+    private var lockObserver: Any?
+    private var unlockObserver: Any?
+    private var workspaceObservers: [Any] = []
     
     // MARK: - Initialization
     
@@ -38,6 +52,9 @@ final class SystemStateMonitor: ObservableObject {
         }
         if let observer = wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+        for observer in workspaceObservers {
+            DistributedNotificationCenter.default().removeObserver(observer)
         }
     }
     
@@ -65,6 +82,33 @@ final class SystemStateMonitor: ObservableObject {
                 self?.handleSystemDidWake()
             }
         }
+
+        lockObserver = DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name("com.apple.screenIsLocked"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleScreenLocked()
+            }
+        }
+
+        unlockObserver = DistributedNotificationCenter.default().addObserver(
+            forName: NSNotification.Name("com.apple.screenIsUnlocked"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.handleScreenUnlocked()
+            }
+        }
+
+        if let lockObserver {
+            workspaceObservers.append(lockObserver)
+        }
+        if let unlockObserver {
+            workspaceObservers.append(unlockObserver)
+        }
     }
     
     private func removeObservers() {
@@ -74,51 +118,45 @@ final class SystemStateMonitor: ObservableObject {
         if let observer = wakeObserver {
             NSWorkspace.shared.notificationCenter.removeObserver(observer)
         }
+        for observer in workspaceObservers {
+            DistributedNotificationCenter.default().removeObserver(observer)
+        }
+        workspaceObservers.removeAll()
     }
     
     // MARK: - Event Handlers
     
     private func handleSystemWillSleep() {
+        logger.debug("system will sleep")
         isSystemSleeping = true
-        lastSleepTime = Date()
-        
-        // 暂停计时器
-        TimerManager.shared.pause()
-        
-        // 停止活动监听
-        ActivityMonitor.shared.stopMonitoring()
-        
-        // 隐藏休息遮罩（如果正在显示）
-        if BreakWindowController.shared.isShowingOverlay {
-            BreakWindowController.shared.hideOverlay()
-        }
-        
+        enterSuspendedState()
         NotificationCenter.default.post(name: .systemWillSleep, object: nil)
     }
     
     private func handleSystemDidWake() {
+        logger.debug("system did wake")
         isSystemSleeping = false
-        lastWakeTime = Date()
-        
-        // 计算睡眠时长
-        let sleepDuration = calculateSleepDuration()
-        
-        // 获取空闲重置阈值（秒）
-        let idleThreshold = SettingsManager.shared.settings.idleResetThreshold * 60
-        
-        if sleepDuration >= idleThreshold {
-            // 睡眠时间超过阈值，重置工作周期
-            TimerManager.shared.resetWorkCycle()
-        } else {
-            // 睡眠时间较短，继续计时
-            TimerManager.shared.resume()
-        }
-        
-        // 重新启动活动监听
-        ActivityMonitor.shared.startMonitoring()
-        
+        resumeFromSuspendedStateIfNeeded()
         NotificationCenter.default.post(name: .systemDidWake, object: nil, userInfo: [
-            "sleepDuration": sleepDuration
+            "sleepDuration": calculateSleepDuration()
+        ])
+    }
+
+    private func handleScreenLocked() {
+        guard !isScreenLocked else { return }
+        logger.debug("screen locked")
+        isScreenLocked = true
+        enterSuspendedState()
+        NotificationCenter.default.post(name: .systemWillSleep, object: nil)
+    }
+
+    private func handleScreenUnlocked() {
+        guard isScreenLocked else { return }
+        logger.debug("screen unlocked")
+        isScreenLocked = false
+        resumeFromSuspendedStateIfNeeded()
+        NotificationCenter.default.post(name: .systemDidWake, object: nil, userInfo: [
+            "sleepDuration": calculateSleepDuration()
         ])
     }
     
@@ -128,7 +166,76 @@ final class SystemStateMonitor: ObservableObject {
         guard let sleepTime = lastSleepTime else { return 0 }
         return Int(Date().timeIntervalSince(sleepTime))
     }
+
+    private func enterSuspendedState() {
+        if lastSleepTime == nil {
+            lastSleepTime = Date()
+        }
+
+        logger.debug("enter suspended state: sleeping=\(self.isSystemSleeping, privacy: .public) locked=\(self.isScreenLocked, privacy: .public) timerState=\(TimerManager.shared.state.rawValue, privacy: .public)")
+
+        BreakCoordinator.shared.suspendPendingBreak()
+        TimerManager.shared.pause()
+        ActivityMonitor.shared.stopMonitoring()
+
+        if BreakWindowController.shared.isShowingOverlay {
+            BreakWindowController.shared.hideOverlay()
+        }
+    }
+
+    private func resumeFromSuspendedStateIfNeeded() {
+        guard !isSystemSleeping && !isScreenLocked else { return }
+
+        logger.debug("resume from suspended state")
+
+        lastWakeTime = Date()
+
+        let sleepDuration = calculateSleepDuration()
+        let idleThreshold = SettingsManager.shared.settings.idleResetThreshold * 60
+
+        if sleepDuration >= idleThreshold {
+            TimerManager.shared.resetWorkCycle()
+        } else {
+            TimerManager.shared.resume()
+
+            if TimerManager.shared.state == .breaking {
+                BreakWindowController.shared.showOverlay()
+            } else if TimerManager.shared.state == .preBreak {
+                NotificationCenter.default.post(name: .breakTimeReached, object: nil)
+            }
+        }
+
+        ActivityMonitor.shared.startMonitoring()
+        lastSleepTime = nil
+    }
 }
+
+#if DEBUG
+extension SystemStateMonitor {
+    func debugSimulateScreenLock() {
+        handleScreenLocked()
+    }
+
+    func debugSimulateScreenUnlock() {
+        handleScreenUnlocked()
+    }
+
+    func debugSimulateSystemWillSleep() {
+        handleSystemWillSleep()
+    }
+
+    func debugSimulateSystemDidWake() {
+        handleSystemDidWake()
+    }
+
+    func debugResetState() {
+        isSystemSleeping = false
+        isScreenLocked = false
+        lastSleepTime = nil
+        lastWakeTime = nil
+    }
+}
+#endif
 
 // MARK: - Notification Names
 
