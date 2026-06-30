@@ -9,12 +9,11 @@ final class TimerManagerTests: XCTestCase {
     override func setUp() {
         super.setUp()
         timerManager = TimerManager.shared
-        // 停止任何现有计时
-        timerManager.pause()
+        timerManager.debugResetForTests()
     }
     
     override func tearDown() {
-        timerManager.pause()
+        timerManager.debugResetForTests()
         super.tearDown()
     }
     
@@ -47,6 +46,33 @@ final class TimerManagerTests: XCTestCase {
         timerManager.startBreak()
         XCTAssertEqual(timerManager.state, .breaking)
         XCTAssertEqual(timerManager.elapsedBreakTime, 0)
+    }
+
+    func testBreakCompletionPostsOnceAndClampsElapsedTime() {
+        let previousBreakDuration = SettingsManager.shared.settings.breakDuration
+        SettingsManager.shared.settings.breakDuration = 2
+        defer {
+            SettingsManager.shared.settings.breakDuration = previousBreakDuration
+        }
+
+        var completionCount = 0
+        let observer = NotificationCenter.default.addObserver(
+            forName: .breakCompleted,
+            object: nil,
+            queue: nil
+        ) { _ in
+            completionCount += 1
+        }
+        defer {
+            NotificationCenter.default.removeObserver(observer)
+        }
+
+        timerManager.startBreak()
+        timerManager.debugAdvanceTimer(by: 2)
+        timerManager.debugAdvanceTimer(by: 5)
+
+        XCTAssertEqual(completionCount, 1)
+        XCTAssertEqual(timerManager.elapsedBreakTime, 2)
     }
 
     func testPauseFromBreaking() {

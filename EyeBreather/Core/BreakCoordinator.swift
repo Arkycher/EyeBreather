@@ -20,6 +20,9 @@ final class BreakCoordinator {
     
     /// 是否已经触发过休息（防止重复触发）
     private var breakTriggered = false
+
+    /// 当前暂停是否由智能暂停触发，避免恢复用户手动暂停的计时器
+    private var didPauseForReminder = false
     
     private init() {
         setupObservers()
@@ -137,8 +140,12 @@ final class BreakCoordinator {
         
         // 性能优化：设置 tolerance 允许系统合并唤醒
         let timer = Timer(timeInterval: gentleModeWaitSeconds, repeats: false) { [weak self] _ in
-            Task { @MainActor in
-                guard let self = self else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard self.canStartBreakNow else {
+                    self.breakTriggered = false
+                    return
+                }
                 // 如果还没有开始休息，自动开始
                 if TimerManager.shared.state != .breaking {
                     self.startBreak()
@@ -170,8 +177,14 @@ final class BreakCoordinator {
     }
     
     private func handleShouldPause() {
+        cancelAutoBreak()
+        breakTriggered = false
+
         // 全屏应用或白名单应用激活，暂停计时
-        if TimerManager.shared.state == .working || TimerManager.shared.state == .preBreak {
+        if TimerManager.shared.state == .working
+            || TimerManager.shared.state == .preBreak
+            || TimerManager.shared.state == .breaking {
+            didPauseForReminder = true
             TimerManager.shared.pause()
         }
         
@@ -183,10 +196,21 @@ final class BreakCoordinator {
     
     private func handleShouldResume() {
         guard !SystemStateMonitor.shared.isSuspended else { return }
+        guard !AppDetector.shared.shouldPauseReminder else { return }
+        guard didPauseForReminder else { return }
 
         // 恢复计时
         if TimerManager.shared.state == .paused {
             TimerManager.shared.resume()
+            didPauseForReminder = false
+
+            if TimerManager.shared.state == .breaking {
+                BreakWindowController.shared.showOverlay()
+            } else if TimerManager.shared.state == .preBreak || TimerManager.shared.remainingWorkTime == 0 {
+                NotificationCenter.default.post(name: .breakTimeReached, object: nil)
+            }
+        } else {
+            didPauseForReminder = false
         }
     }
     
@@ -194,6 +218,7 @@ final class BreakCoordinator {
     
     func startBreak() {
         cancelAutoBreak()
+        didPauseForReminder = false
         SoundManager.shared.playBreakStartSound()
         TimerManager.shared.startBreak()
         BreakWindowController.shared.showOverlay()
@@ -201,6 +226,7 @@ final class BreakCoordinator {
     
     func skipBreak() {
         cancelAutoBreak()
+        didPauseForReminder = false
         breakTriggered = false
         TimerManager.shared.skipBreak()
         BreakWindowController.shared.hideOverlay()
@@ -209,6 +235,7 @@ final class BreakCoordinator {
     
     func delayBreak(minutes: Int) {
         cancelAutoBreak()
+        didPauseForReminder = false
         breakTriggered = false
         TimerManager.shared.delayBreak(minutes: minutes)
         BreakWindowController.shared.hideOverlay()
@@ -218,6 +245,12 @@ final class BreakCoordinator {
     func suspendPendingBreak() {
         cancelAutoBreak()
         breakTriggered = false
+    }
+
+    private var canStartBreakNow: Bool {
+        !DoNotDisturbManager.shared.isInDoNotDisturbPeriod
+            && !AppDetector.shared.shouldPauseReminder
+            && !SystemStateMonitor.shared.isSuspended
     }
     
     // MARK: - Statistics Recording

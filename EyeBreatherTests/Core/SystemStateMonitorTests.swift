@@ -62,6 +62,18 @@ final class SystemStateMonitorTests: XCTestCase {
         XCTAssertFalse(systemStateMonitor.isSuspended)
     }
 
+    func testUnlockDoesNotResumeManualPause() {
+        timerManager.start()
+        timerManager.pause()
+
+        systemStateMonitor.debugSimulateScreenLock()
+        XCTAssertEqual(timerManager.state, .paused)
+
+        systemStateMonitor.debugSimulateScreenUnlock()
+        XCTAssertEqual(timerManager.state, .paused)
+        XCTAssertFalse(BreakWindowController.shared.isShowingOverlay)
+    }
+
     func testUnlockReTriggersPendingBreakFromPreBreakState() {
         let reachedExpectation = expectation(description: "break time reached after unlock")
 

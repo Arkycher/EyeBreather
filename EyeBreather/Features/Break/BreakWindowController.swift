@@ -16,14 +16,19 @@ final class BreakWindowController: ObservableObject {
     
     /// 屏幕变化监听器
     private var screenObserver: Any?
+    private var workspaceObservers: [Any] = []
     
     private init() {
         setupScreenObserver()
+        setupOverlayRepairObservers()
     }
     
     deinit {
         if let observer = screenObserver {
             NotificationCenter.default.removeObserver(observer)
+        }
+        for observer in workspaceObservers {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
         }
     }
     
@@ -35,13 +40,44 @@ final class BreakWindowController: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.handleScreenChange()
             }
         }
     }
+
+    private func setupOverlayRepairObservers() {
+        let notificationCenter = NSWorkspace.shared.notificationCenter
+
+        let activeSpaceObserver = notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.repairOverlayWindows()
+            }
+        }
+
+        let appActivationObserver = notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.repairOverlayWindows()
+            }
+        }
+
+        workspaceObservers.append(activeSpaceObserver)
+        workspaceObservers.append(appActivationObserver)
+    }
     
     private func handleScreenChange() {
+        repairOverlayWindows()
+    }
+
+    private func repairOverlayWindows() {
         guard isShowingOverlay else { return }
         
         // 获取当前所有屏幕
@@ -68,6 +104,7 @@ final class BreakWindowController: ObservableObject {
         // 更新现有窗口的位置和大小
         for (screen, window) in overlayWindows {
             window.setFrame(screen.frame, display: true)
+            window.orderFrontRegardless()
         }
     }
     

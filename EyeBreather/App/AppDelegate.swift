@@ -65,7 +65,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     
     @MainActor
     private func handleNotificationResponse(_ response: UNNotificationResponse) {
-        switch response.actionIdentifier {
+        handleNotificationAction(
+            actionIdentifier: response.actionIdentifier,
+            categoryIdentifier: response.notification.request.content.categoryIdentifier
+        )
+    }
+
+    @MainActor
+    func handleNotificationAction(actionIdentifier: String, categoryIdentifier: String) {
+        switch actionIdentifier {
         case "START_BREAK":
             BreakCoordinator.shared.startBreak()
             
@@ -77,7 +85,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             
         case UNNotificationDefaultActionIdentifier:
             // 用户点击通知本身（而非按钮）
-            BreakCoordinator.shared.startBreak()
+            if categoryIdentifier == "BREAK_REMINDER" {
+                BreakCoordinator.shared.startBreak()
+            }
             
         default:
             break

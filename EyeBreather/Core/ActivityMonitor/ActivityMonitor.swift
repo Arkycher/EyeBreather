@@ -144,7 +144,7 @@ final class ActivityMonitor: ObservableObject {
         idleCheckTimer?.invalidate()
         // 性能优化：延长检查间隔到 30 秒，并设置 tolerance 允许系统合并唤醒
         let timer = Timer(timeInterval: 30.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.checkIdleStatus()
             }
         }

@@ -24,6 +24,12 @@ final class WallpaperManager: ObservableObject {
     
     /// 壁纸的平均亮度 (0-1, 0=暗, 1=亮)
     @Published private(set) var wallpaperBrightness: CGFloat = 0.3
+
+    /// 当前加载的自定义背景图片
+    @Published private(set) var customBackgroundImage: NSImage?
+
+    /// 自定义背景图片亮度
+    @Published private(set) var customBackgroundBrightness: CGFloat = 0.3
     
     /// 壁纸是否偏亮（用于决定文字颜色）
     var isWallpaperBright: Bool {
@@ -34,6 +40,9 @@ final class WallpaperManager: ObservableObject {
     
     /// 缓存的壁纸 URL
     private var cachedWallpaperURL: URL?
+    private var wallpaperLoadGeneration = 0
+    private var customBackgroundLoadGeneration = 0
+    private var loadedCustomBackgroundPath: String?
     
     private init() {
         // 性能优化：懒加载壁纸，只在需要时才加载
@@ -50,44 +59,27 @@ final class WallpaperManager: ObservableObject {
     
     /// 加载桌面壁纸
     func loadWallpaper() {
+        wallpaperLoadGeneration += 1
+        let generation = wallpaperLoadGeneration
         isLoading = true
         errorMessage = nil
-        
-        // 方法1: 通过 NSWorkspace 获取壁纸 URL
-        if let screen = NSScreen.main,
-           let wallpaperURL = NSWorkspace.shared.desktopImageURL(for: screen) {
-            cachedWallpaperURL = wallpaperURL
-            
-            // 尝试直接加载
-            if let image = NSImage(contentsOf: wallpaperURL) {
-                self.wallpaperImage = image
-                self.wallpaperBrightness = Self.calculateBrightness(of: image)
-                self.hasPermission = true
+
+        let primaryWallpaperURL = NSScreen.main.flatMap { NSWorkspace.shared.desktopImageURL(for: $0) }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Self.loadWallpaperSnapshot(primaryURL: primaryWallpaperURL)
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.wallpaperLoadGeneration == generation else { return }
+
+                self.cachedWallpaperURL = result.url
+                self.wallpaperImage = result.image
+                self.wallpaperBrightness = result.brightness
+                self.hasPermission = result.hasPermission
+                self.errorMessage = result.errorMessage
                 self.isLoading = false
-                return
-            }
-            
-            // 尝试通过 Data 加载
-            do {
-                let data = try Data(contentsOf: wallpaperURL)
-                if let image = NSImage(data: data) {
-                    self.wallpaperImage = image
-                    self.wallpaperBrightness = Self.calculateBrightness(of: image)
-                    self.hasPermission = true
-                    self.isLoading = false
-                    return
-                }
-            } catch {
-                // 访问被拒绝，可能需要权限
-                self.hasPermission = false
-                self.errorMessage = "无法访问壁纸文件，可能需要授权"
             }
         }
-        
-        // 方法2: 回退到系统默认壁纸目录
-        loadSystemDefaultWallpaper()
-        
-        isLoading = false
     }
     
     /// 分析自定义图片的亮度
@@ -97,9 +89,35 @@ final class WallpaperManager: ObservableObject {
         }
         return Self.calculateBrightness(of: image)
     }
+
+    func loadCustomBackground(path: String?) {
+        guard loadedCustomBackgroundPath != path || customBackgroundImage == nil else { return }
+
+        customBackgroundLoadGeneration += 1
+        let generation = customBackgroundLoadGeneration
+        loadedCustomBackgroundPath = path
+
+        guard let path else {
+            customBackgroundImage = nil
+            customBackgroundBrightness = 0.3
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let image = NSImage(contentsOfFile: path)
+            let brightness = image.map { Self.calculateBrightness(of: $0) } ?? 0.3
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.customBackgroundLoadGeneration == generation else { return }
+
+                self.customBackgroundImage = image
+                self.customBackgroundBrightness = brightness
+            }
+        }
+    }
     
     /// 计算图片的平均亮度
-    static func calculateBrightness(of image: NSImage) -> CGFloat {
+    nonisolated static func calculateBrightness(of image: NSImage) -> CGFloat {
         // 缩小图片以提高计算速度
         let sampleSize = CGSize(width: 50, height: 50)
         
@@ -180,6 +198,7 @@ final class WallpaperManager: ObservableObject {
     
     /// 刷新壁纸（用户切换桌面壁纸后调用）
     func refresh() {
+        wallpaperLoadGeneration += 1
         wallpaperImage = nil
         cachedWallpaperURL = nil
         loadWallpaper()
@@ -187,11 +206,53 @@ final class WallpaperManager: ObservableObject {
     
     // MARK: - Private Methods
     
-    private func loadSystemDefaultWallpaper() {
+    nonisolated private static func loadWallpaperSnapshot(primaryURL: URL?) -> WallpaperSnapshot {
+        if let primaryURL {
+            if let image = NSImage(contentsOf: primaryURL) {
+                return WallpaperSnapshot(
+                    image: image,
+                    brightness: calculateBrightness(of: image),
+                    hasPermission: true,
+                    errorMessage: nil,
+                    url: primaryURL
+                )
+            }
+
+            do {
+                let data = try Data(contentsOf: primaryURL)
+                if let image = NSImage(data: data) {
+                    return WallpaperSnapshot(
+                        image: image,
+                        brightness: calculateBrightness(of: image),
+                        hasPermission: true,
+                        errorMessage: nil,
+                        url: primaryURL
+                    )
+                }
+            } catch {
+                let fallback = loadSystemDefaultWallpaper()
+                if fallback.image != nil {
+                    return fallback
+                }
+
+                return WallpaperSnapshot(
+                    image: nil,
+                    brightness: 0.3,
+                    hasPermission: false,
+                    errorMessage: "无法访问壁纸文件，可能需要授权",
+                    url: primaryURL
+                )
+            }
+        }
+
+        return loadSystemDefaultWallpaper()
+    }
+
+    nonisolated private static func loadSystemDefaultWallpaper() -> WallpaperSnapshot {
         let systemWallpaperPath = "/System/Library/Desktop Pictures"
         
         guard let contents = try? FileManager.default.contentsOfDirectory(atPath: systemWallpaperPath) else {
-            return
+            return WallpaperSnapshot(image: nil, brightness: 0.3, hasPermission: false, errorMessage: nil, url: nil)
         }
         
         // 按优先级查找系统壁纸
@@ -200,17 +261,36 @@ final class WallpaperManager: ObservableObject {
         for name in preferredNames {
             if let match = contents.first(where: { $0.contains(name) && ($0.hasSuffix(".heic") || $0.hasSuffix(".jpg")) }),
                let image = NSImage(contentsOfFile: "\(systemWallpaperPath)/\(match)") {
-                self.wallpaperImage = image
-                self.hasPermission = true
-                return
+                return WallpaperSnapshot(
+                    image: image,
+                    brightness: calculateBrightness(of: image),
+                    hasPermission: true,
+                    errorMessage: nil,
+                    url: URL(fileURLWithPath: "\(systemWallpaperPath)/\(match)")
+                )
             }
         }
         
         // 如果没有找到首选壁纸，使用第一个可用的
         if let firstImage = contents.first(where: { $0.hasSuffix(".heic") || $0.hasSuffix(".jpg") }),
            let image = NSImage(contentsOfFile: "\(systemWallpaperPath)/\(firstImage)") {
-            self.wallpaperImage = image
-            self.hasPermission = true
+            return WallpaperSnapshot(
+                image: image,
+                brightness: calculateBrightness(of: image),
+                hasPermission: true,
+                errorMessage: nil,
+                url: URL(fileURLWithPath: "\(systemWallpaperPath)/\(firstImage)")
+            )
         }
+
+        return WallpaperSnapshot(image: nil, brightness: 0.3, hasPermission: false, errorMessage: nil, url: nil)
     }
+}
+
+private struct WallpaperSnapshot {
+    let image: NSImage?
+    let brightness: CGFloat
+    let hasPermission: Bool
+    let errorMessage: String?
+    let url: URL?
 }

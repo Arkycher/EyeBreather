@@ -28,6 +28,7 @@ final class TimerManager: ObservableObject {
     private var stateBeforePause: TimerState?
     private var lastTickDate: Date?
     private var tickRemainder: TimeInterval = 0
+    private var didCompleteCurrentBreak = false
     
     // MARK: - Computed Properties
     
@@ -82,7 +83,7 @@ final class TimerManager: ObservableObject {
     private func observeSettingsChanges() {
         NotificationCenter.default.publisher(for: .settingsDidChange)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
+            .sink { _ in
                 // 设置变更时可能需要重新计算
             }
             .store(in: &cancellables)
@@ -123,6 +124,7 @@ final class TimerManager: ObservableObject {
         stateBeforePause = nil
         state = .breaking
         elapsedBreakTime = 0
+        didCompleteCurrentBreak = false
         stopTimer()
         startTimer()
     }
@@ -138,6 +140,8 @@ final class TimerManager: ObservableObject {
         stateBeforePause = nil
         elapsedWorkTime = max(0, workDurationSeconds - minutes * 60)
         state = .working
+        stopTimer()
+        startTimer()
     }
     
     /// 完成休息
@@ -152,6 +156,7 @@ final class TimerManager: ObservableObject {
         state = .working
         elapsedWorkTime = 0
         elapsedBreakTime = 0
+        didCompleteCurrentBreak = false
         lastActivityTime = Date()
         startTimer()
     }
@@ -163,6 +168,8 @@ final class TimerManager: ObservableObject {
     
     /// 检查空闲重置
     func checkIdleReset() {
+        guard state == .working || state == .preBreak else { return }
+
         let idleThreshold = SettingsManager.shared.settings.idleResetThreshold * 60
         let idleTime = Int(Date().timeIntervalSince(lastActivityTime))
         
@@ -220,6 +227,12 @@ final class TimerManager: ObservableObject {
 
         guard elapsedSinceLastTick > 0 else { return }
 
+        advanceTimer(by: elapsedSinceLastTick)
+    }
+
+    private func advanceTimer(by elapsedSinceLastTick: Int) {
+        guard elapsedSinceLastTick > 0 else { return }
+
         switch state {
         case .working, .preBreak:
             elapsedWorkTime += elapsedSinceLastTick
@@ -236,16 +249,24 @@ final class TimerManager: ObservableObject {
             }
             
         case .breaking:
-            elapsedBreakTime += elapsedSinceLastTick
+            elapsedBreakTime = min(breakDurationSeconds, elapsedBreakTime + elapsedSinceLastTick)
             
             // 检查休息是否完成
             if elapsedBreakTime >= breakDurationSeconds {
-                NotificationCenter.default.post(name: .breakCompleted, object: nil)
+                finishCurrentBreakTimer()
             }
             
         case .idle, .paused:
             break
         }
+    }
+
+    private func finishCurrentBreakTimer() {
+        guard state == .breaking, !didCompleteCurrentBreak else { return }
+
+        didCompleteCurrentBreak = true
+        stopTimer()
+        NotificationCenter.default.post(name: .breakCompleted, object: nil)
     }
 }
 
@@ -261,6 +282,24 @@ extension Notification.Name {
 extension TimerManager {
     func debugSetState(_ newState: TimerState) {
         state = newState
+    }
+
+    func debugAdvanceTimer(by seconds: Int) {
+        advanceTimer(by: seconds)
+    }
+
+    func debugResetForTests() {
+        stopTimer()
+        stateBeforePause = nil
+        state = .idle
+        elapsedWorkTime = 0
+        elapsedBreakTime = 0
+        lastActivityTime = Date()
+        didCompleteCurrentBreak = false
+    }
+
+    func debugSetLastActivityTime(_ date: Date) {
+        lastActivityTime = date
     }
 }
 #endif

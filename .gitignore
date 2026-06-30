@@ -2,6 +2,7 @@
 build/
 DerivedData/
 .derivedData/
+.codex-workflow/
 *.xcuserstate
 *.xcuserdatad/
 xcuserdata/

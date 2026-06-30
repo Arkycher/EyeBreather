@@ -184,8 +184,7 @@ struct MenuBarView: View {
     }
     
     private func startBreakNow() {
-        timerManager.startBreak()
-        BreakWindowController.shared.showOverlay()
+        BreakCoordinator.shared.startBreak()
     }
     
     // MARK: - Today Stats

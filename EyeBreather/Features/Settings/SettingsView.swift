@@ -620,6 +620,8 @@ struct AppearanceSectionContent: View {
                             // 选择桌面壁纸时触发加载
                             if style == .desktop {
                                 wallpaperManager.loadWallpaper()
+                            } else if style == .custom {
+                                wallpaperManager.loadCustomBackground(path: settingsManager.settings.customBackgroundPath)
                             }
                         }
                     }
@@ -702,8 +704,7 @@ struct AppearanceSectionContent: View {
                 SettingsCard(title: "自定义背景") {
                     VStack(spacing: 12) {
                         // 背景预览
-                        if let path = settingsManager.settings.customBackgroundPath,
-                           let nsImage = NSImage(contentsOfFile: path) {
+                        if let nsImage = wallpaperManager.customBackgroundImage {
                             Image(nsImage: nsImage)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
@@ -766,6 +767,8 @@ struct AppearanceSectionContent: View {
             // 如果当前选择的是桌面壁纸，加载壁纸
             if settingsManager.settings.breakStyle == .desktop {
                 wallpaperManager.loadWallpaper()
+            } else if settingsManager.settings.breakStyle == .custom {
+                wallpaperManager.loadCustomBackground(path: settingsManager.settings.customBackgroundPath)
             }
         }
     }
@@ -780,6 +783,7 @@ struct AppearanceSectionContent: View {
         
         if panel.runModal() == .OK, let url = panel.url {
             settingsManager.settings.customBackgroundPath = url.path
+            wallpaperManager.loadCustomBackground(path: url.path)
         }
     }
 }

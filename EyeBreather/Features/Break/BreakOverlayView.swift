@@ -7,9 +7,6 @@ struct BreakOverlayView: View {
     @ObservedObject private var settingsManager = SettingsManager.shared
     @ObservedObject private var wallpaperManager = WallpaperManager.shared
     
-    /// 自定义背景的亮度（缓存计算结果）
-    @State private var customBackgroundBrightness: CGFloat = 0.3
-    
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -71,6 +68,13 @@ struct BreakOverlayView: View {
             // 性能优化：懒加载壁纸（只在休息界面显示时加载）
             if settingsManager.settings.breakStyle == .desktop {
                 WallpaperManager.shared.ensureLoaded()
+            } else if settingsManager.settings.breakStyle == .custom {
+                WallpaperManager.shared.loadCustomBackground(path: settingsManager.settings.customBackgroundPath)
+            }
+        }
+        .onChange(of: settingsManager.settings.customBackgroundPath) { _, path in
+            if settingsManager.settings.breakStyle == .custom {
+                WallpaperManager.shared.loadCustomBackground(path: path)
             }
         }
     }
@@ -147,16 +151,11 @@ struct BreakOverlayView: View {
             }
             .clipped()
         case .custom:
-            if let path = settingsManager.settings.customBackgroundPath,
-               let nsImage = NSImage(contentsOfFile: path) {
+            if let nsImage = wallpaperManager.customBackgroundImage {
                 Image(nsImage: nsImage)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .overlay(Color.black.opacity(0.3))
-                    .onAppear {
-                        // 分析自定义背景的亮度
-                        customBackgroundBrightness = WallpaperManager.calculateBrightness(of: nsImage)
-                    }
             } else {
                 Color.black.opacity(0.9)
             }
@@ -216,7 +215,7 @@ struct BreakOverlayView: View {
             return (wallpaperManager.wallpaperBrightness * 0.7) > 0.5
         case .custom:
             // 自定义背景，考虑到有 0.3 的黑色遮罩
-            return (customBackgroundBrightness * 0.7) > 0.5
+            return (wallpaperManager.customBackgroundBrightness * 0.7) > 0.5
         }
     }
     

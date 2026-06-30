@@ -38,6 +38,7 @@ final class SystemStateMonitor: ObservableObject {
     private var lockObserver: Any?
     private var unlockObserver: Any?
     private var workspaceObservers: [Any] = []
+    private var didPauseTimerForSuspension = false
     
     // MARK: - Initialization
     
@@ -67,7 +68,7 @@ final class SystemStateMonitor: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.handleSystemWillSleep()
             }
         }
@@ -78,7 +79,7 @@ final class SystemStateMonitor: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.handleSystemDidWake()
             }
         }
@@ -88,7 +89,7 @@ final class SystemStateMonitor: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.handleScreenLocked()
             }
         }
@@ -98,7 +99,7 @@ final class SystemStateMonitor: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 self?.handleScreenUnlocked()
             }
         }
@@ -175,7 +176,12 @@ final class SystemStateMonitor: ObservableObject {
         logger.debug("enter suspended state: sleeping=\(self.isSystemSleeping, privacy: .public) locked=\(self.isScreenLocked, privacy: .public) timerState=\(TimerManager.shared.state.rawValue, privacy: .public)")
 
         BreakCoordinator.shared.suspendPendingBreak()
-        TimerManager.shared.pause()
+        if TimerManager.shared.state == .working
+            || TimerManager.shared.state == .preBreak
+            || TimerManager.shared.state == .breaking {
+            didPauseTimerForSuspension = true
+            TimerManager.shared.pause()
+        }
         ActivityMonitor.shared.stopMonitoring()
 
         if BreakWindowController.shared.isShowingOverlay {
@@ -193,10 +199,12 @@ final class SystemStateMonitor: ObservableObject {
         let sleepDuration = calculateSleepDuration()
         let idleThreshold = SettingsManager.shared.settings.idleResetThreshold * 60
 
-        if sleepDuration >= idleThreshold {
+        if sleepDuration >= idleThreshold, didPauseTimerForSuspension {
             TimerManager.shared.resetWorkCycle()
-        } else {
+            didPauseTimerForSuspension = false
+        } else if didPauseTimerForSuspension {
             TimerManager.shared.resume()
+            didPauseTimerForSuspension = false
 
             if TimerManager.shared.state == .breaking {
                 BreakWindowController.shared.showOverlay()
@@ -206,6 +214,7 @@ final class SystemStateMonitor: ObservableObject {
         }
 
         ActivityMonitor.shared.startMonitoring()
+        NotificationCenter.default.post(name: .shouldResumeReminder, object: nil)
         lastSleepTime = nil
     }
 }
@@ -233,6 +242,7 @@ extension SystemStateMonitor {
         isScreenLocked = false
         lastSleepTime = nil
         lastWakeTime = nil
+        didPauseTimerForSuspension = false
     }
 }
 #endif
